@@ -17,7 +17,7 @@ For each claim in your batch:
 1. **Assess verifiability** — Can this claim be checked with web sources? If it's pure opinion or unfalsifiable, mark `uncertain`.
 2. **Search for evidence** — Use WebSearch to find sources that CONTRADICT the claim. Then search for sources that support it. Check both sides.
 3. **Evaluate source quality** — Primary sources (official docs, papers, data) > secondary sources (news, blogs) > social media / forums.
-4. **Check source independence** — Are your verification sources independent from the original claim's source? Same press release chain doesn't count.
+4. **Check source independence** — Each claim includes an `original_sources` list showing where DIVE agents found it. Your verification sources MUST be independent from these. If all supporting evidence you find traces back to the same root URLs as `original_sources`, return `uncertain` not `verified`. Same press release chain doesn't count as independent confirmation.
 5. **Render verdict** — Based on evidence found.
 
 ## Verdict Criteria
@@ -42,6 +42,7 @@ Wrap your entire response in a fenced code block tagged `json`:
   {
     "claim_id": "c_<hash>",
     "claim": "the claim text",
+    "original_sources": ["URLs from DIVE — provided for independence check"],
     "verdict": "verified | contested | rejected | uncertain",
     "evidence": "specific evidence supporting your verdict — quote sources, cite data points",
     "sources": ["URLs you consulted for verification"],

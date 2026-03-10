@@ -50,6 +50,6 @@ Return a JSON object with claims keyed by sequential placeholders. The orchestra
 
 - Skip tautologies, hedged statements ("might", "could potentially"), and vague generalizations
 - Skip opinions unless they are from a named expert and attributed
-- Maximum 30 claims per run (prioritize high-priority claims if more exist)
+- Maximum {{MAX_CLAIMS}} claims per run (prioritize high-priority claims if more exist)
 - Every claim must be traceable to at least one source URL or document
 - Do NOT invent claims — only extract what the research agents actually found
