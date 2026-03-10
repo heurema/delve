@@ -120,7 +120,7 @@ REBUILDABLE from events.jsonl + .done markers. Updated after each stage.
 
 Hash: first 6 hex chars of SHA-256 of question text (lowercase).
 
-## dive/q_&lt;hash&gt;/output.json
+## dive/q_\<hash\>/output.json
 
 ```json
 {
@@ -141,7 +141,7 @@ Hash: first 6 hex chars of SHA-256 of question text (lowercase).
 }
 ```
 
-## dive/q_&lt;hash&gt;/status.json
+## dive/q_\<hash\>/status.json
 
 ```json
 {
@@ -177,7 +177,7 @@ Hash: first 6 hex chars of SHA-256 of question text (lowercase).
 
 Hash: first 6 hex chars of SHA-256 of claim text (lowercase).
 
-## verify/verdicts/c_&lt;hash&gt;.json
+## verify/verdicts/c_\<hash\>.json
 
 ```json
 {
