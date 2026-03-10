@@ -107,3 +107,62 @@ Depth: <depth> | Run: <run_id>
 ```
 
 Proceed to [Stage 1: SCAN](#stage-1-scan).
+
+## Stage 1: SCAN
+
+**Inline, ~20-30s. No subagents.**
+
+### 1.1 Check existing research
+
+Search for prior work on this topic:
+
+```
+Glob: docs/research/*<topic-keywords>*.md
+Grep: <topic keywords> across docs/research/
+```
+
+For each match, read the frontmatter to check date and coverage.
+
+### 1.2 Web search
+
+Use WebSearch — 3-5 queries:
+1. `<topic>` (verbatim)
+2. `<topic> 2026 overview` (recency-biased)
+3. `<topic> comparison alternatives` (breadth)
+4-5. Topic-specific variations based on scan context
+
+### 1.3 Fetch previews
+
+Use WebFetch on the top-5 results by estimated relevance. Extract title, first 500 chars of content for snippet.
+
+If WebFetch fails for a URL → mark `"fetched": false`, continue with others.
+
+If WebSearch is unavailable → fallback to existing research only + warn user.
+
+### 1.4 Write output
+
+Write `scan/result.json` (atomic: temp + mv). Schema per `references/checkpoint-schema.md`.
+
+### 1.5 Decision gate
+
+| Gate | Condition | Action |
+|------|-----------|--------|
+| `no_evidence` | 0 web sources + 0 existing research | Warn user. Offer: abort or proceed with first-principles analysis |
+| `reuse` | Comprehensive existing research < 30 days old | Skip to SYNTHESIZE, merge existing docs |
+| `refresh` | Existing research > 30 days old | DIVE focuses on deltas and new sources |
+| `extend` | Partial existing research (some aspects uncovered) | DIVE focuses on uncovered aspects |
+| `full-run` | No prior research found | Full pipeline |
+
+If `--quick` flag: after writing scan output → skip directly to [Stage 5: SYNTHESIZE](#stage-5-synthesize) with scan sources only.
+
+If `reuse` gate: skip to [Stage 5: SYNTHESIZE](#stage-5-synthesize) using existing research files.
+
+Log event: `{"event": "scan_complete", "sources_count": N, "existing_count": N, "decision_gate": "<gate>"}`.
+Update `state.json`: `current_stage → "decompose"`, `stages.scan.status → "done"`, `stages.scan.completed_at`.
+Touch `scan.done`.
+
+**Note: every stage must follow this strict commit order:**
+1. Write artifact (result.json, sub-tasks.json, etc.)
+2. Log event to events.jsonl
+3. Update state.json
+4. Touch `<stage>.done` marker
