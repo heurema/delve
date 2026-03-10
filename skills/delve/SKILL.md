@@ -230,3 +230,86 @@ Log event: `{"event": "decompose_complete", "total": N, "active": N, "skipped": 
 Touch `decompose.done`.
 
 Proceed to [Stage 3: DIVE](#stage-3-dive).
+
+## Stage 3: DIVE
+
+**Parallel subagents, ~60-300s depending on depth.**
+
+### 3.1 Prepare prompts
+
+Read `references/dive-prompt.md` once.
+
+For each non-skipped sub-question from sub-tasks.json:
+1. Build the full prompt: dive-prompt.md content + sub-question details + relevant sources from scan/result.json
+2. Write frozen prompt to `dive/q_<hash>/prompt.md` (for resume auditability)
+
+### 3.2 Dispatch agents
+
+For each sub-question, spawn a research agent:
+
+```
+Agent tool:
+  subagent_type: general-purpose
+  run_in_background: true
+  prompt: <contents of dive/q_<hash>/prompt.md>
+```
+
+**Parallelism control:**
+- Dispatch up to `max_concurrent` agents (per depth mapping)
+- If more sub-questions than max_concurrent → dispatch in batches
+
+**For `--depth deep` with dependencies:**
+- Topological sort sub-questions by `depends_on`
+- Wave 1: dispatch all tasks with no dependencies
+- Collect Wave 1 → pass findings to Wave 2 prompts as additional context
+- Continue until all waves complete
+
+Write initial `status.json` for each dispatched worker: `{"status": "pending", "attempt_id": 1, ...}`.
+
+Log event per dispatch: `{"event": "worker_dispatched", "task_id": "q_<hash>", "question": "...", "priority": "P0"}`.
+
+### 3.3 Collect results
+
+For each background agent, use TaskOutput tool with `block: true` to wait.
+
+When an agent completes:
+1. Parse the agent's response for `output.json` content and `output.md` content
+2. Write `dive/q_<hash>/output.json` (atomic)
+3. Write `dive/q_<hash>/output.md` (atomic)
+4. Update `dive/q_<hash>/status.json`: status, completed_at, duration_ms
+5. Log event: `{"event": "worker_complete", "task_id": "q_<hash>", "status": "completed", "duration_ms": N, "claims_count": N}`
+
+**On timeout** (agent doesn't respond within WORKER_TIMEOUT_MS):
+1. Update status.json: `{"status": "timeout"}`
+2. Log event: `{"event": "worker_timeout", "task_id": "q_<hash>", "timeout_ms": 120000}`
+
+**On error** (agent returns error or malformed output):
+1. Update status.json: `{"status": "error", "error": "<description>"}`
+2. Log event: `{"event": "worker_error", "task_id": "q_<hash>", "error": "<description>"}`
+
+### 3.4 Retry P0 failures
+
+If any P0 sub-question failed (timeout or error):
+1. Retry ONCE with a fresh agent
+2. Update status.json: `attempt_id: 2`
+3. Log event: `{"event": "worker_retry", "task_id": "q_<hash>", "attempt": 2}`
+4. If retry also fails → proceed to coverage evaluation (may trigger ABORT)
+
+### 3.5 Evaluate coverage
+
+Compute priority-weighted coverage:
+
+```
+coverage = sum(P_WEIGHTS[task.priority] for task in completed) / sum(P_WEIGHTS[task.priority] for task in all_active)
+```
+
+| Condition | Action |
+|-----------|--------|
+| All P0 complete + coverage ≥ 0.7 | Proceed normally |
+| Any P0 still failed after retry | **ABORT** — log reason, release lock, update registry, inform user |
+| Coverage < 0.7 but > 0 | Proceed with `completion_status: incomplete`. Warn user which sub-questions failed |
+| 0 completed + no existing research | **ABORT** |
+| 0 completed + existing research available | Proceed as `synthesis_only` using existing docs |
+
+Log event: `{"event": "dive_complete", "completed": N, "failed": N, "coverage": 0.85}`.
+Touch `dive.done`.
