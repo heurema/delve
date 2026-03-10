@@ -1,0 +1,12 @@
+{
+  "name": "delve",
+  "description": "Deep research orchestrator — autonomous multi-agent research with stage-gated pipeline, claim verification, and resume support",
+  "version": "0.1.0",
+  "author": {
+    "name": "heurema"
+  },
+  "homepage": "https://github.com/heurema/delve",
+  "repository": "https://github.com/heurema/delve",
+  "license": "MIT",
+  "keywords": ["research", "deep-research", "verification", "multi-agent", "orchestrator"]
+}
