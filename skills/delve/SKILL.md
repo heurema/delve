@@ -166,3 +166,67 @@ Touch `scan.done`.
 2. Log event to events.jsonl
 3. Update state.json
 4. Touch `<stage>.done` marker
+
+## Stage 2: DECOMPOSE
+
+**Inline, ~5s. No subagents.**
+
+### 2.1 Generate sub-questions
+
+Based on topic + scan/result.json, decompose into sub-questions:
+
+- **shallow**: 2 sub-questions
+- **medium**: 3-4 sub-questions
+- **deep**: 5-6 sub-questions
+
+Each sub-question must have:
+- `q_<hash>` — computed by orchestrator via Bash: `printf '%s' "$(echo "$QUESTION" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')" | shasum -a 256 | cut -c1-6`
+- Priority: `P0` (critical to topic), `P1` (important context), `P2` (nice-to-have depth)
+- `depends_on: []` — only for `--depth deep` (creates topological execution waves)
+- For shallow/medium: ALL sub-questions must be independent (no dependencies)
+- `rationale` — why this question advances the research
+- `estimated_sources` — expected number of sources
+
+Guidelines for decomposition:
+- Sub-questions should be non-overlapping
+- Each should be answerable with 3-5 web sources
+- P0 sub-questions must cover the core of the topic
+- Prefer specific, focused questions over broad ones
+
+### 2.2 Filter existing coverage
+
+If scan found existing research:
+- For each sub-question, check if existing docs already cover it well
+- If covered → set `skip: true`, `skip_reason: "covered by <path>"`
+- If ALL sub-questions are skipped → set terminal status `synthesis_only`, skip to SYNTHESIZE
+
+### 2.3 Write output
+
+Write `decompose/sub-tasks.json` (atomic). Schema per `references/checkpoint-schema.md`.
+
+### 2.4 HITL checkpoint
+
+**Skipped with `--quick` (already skipped to SYNTHESIZE by now).**
+
+Present decomposition to user for approval:
+
+```
+Decomposed "<topic>" into N sub-questions:
+
+1. [q_a1b2] How does X compare to Y? (P0, ~3 sources)
+2. [q_c3d4] What are alternatives to Z? (P1, ~5 sources)
+3. [q_e5f6] Historical context of W? (P2, ~2 sources)
+   ⏭ [q_g7h8] Already covered by docs/research/... (skip)
+
+Approve / Edit / Add / Remove?
+```
+
+Wait for user response. If edits requested:
+- Apply changes to sub-tasks.json
+- Recompute `q_<hash>` IDs for any changed question text
+- Re-check dependencies validity
+
+Log event: `{"event": "decompose_complete", "total": N, "active": N, "skipped": N}`.
+Touch `decompose.done`.
+
+Proceed to [Stage 3: DIVE](#stage-3-dive).
