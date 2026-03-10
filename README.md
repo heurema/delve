@@ -112,6 +112,16 @@ Runs checkpoint after each stage to `~/.cache/delve/runs/`. Resume interrupted r
 
 Delve uses Claude Code subagents and built-in WebSearch/WebFetch tools. Your research topic and web content are processed through Claude's standard API under your existing authentication. No data is sent to additional endpoints beyond what Claude Code normally uses. When `--providers claude` is active, no external AI models are invoked and the topic is redacted in local event logs.
 
+## Feedback
+
+If the verifier returns incorrect verdicts, the pipeline stalls, or resume doesn't work — file it from Claude Code with [Reporter](https://github.com/heurema/reporter):
+
+```bash
+claude plugin install reporter@emporium
+```
+
+Then: `/report bug` or `/report feature` or `/report question`
+
 ## See also
 
 - [skill7.dev/plugins/delve](https://skill7.dev/plugins/delve) — plugin page and changelog
