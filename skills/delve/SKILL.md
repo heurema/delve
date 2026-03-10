@@ -399,3 +399,85 @@ Write `verify/summary.json` (atomic):
 
 Log event: `{"event": "verify_complete", "verified": N, "contested": N, "rejected": N, "uncertain": N}`.
 Touch `verify.done`.
+
+## Stage 5: SYNTHESIZE
+
+**Inline, ~15s. No subagents.**
+
+### 5.1 Collect inputs
+
+Gather all completed artifacts:
+- `dive/q_*/output.json` and `output.md` (from completed workers)
+- `verify/verdicts/c_*.json` (if verify ran)
+- `verify/summary.json` (if verify ran)
+- `scan/result.json` (for source list)
+- Any existing research files (if `reuse`/`extend`/`refresh` gate)
+
+Read `references/synthesize-guide.md` for merge instructions.
+
+### 5.2 Determine quality labels
+
+**verification_status** — from verify/summary.json (uses `verified_ratio`, NOT `coverage`):
+- `verified`: verified_ratio ≥ 0.8 AND 0 rejected among P0-sourced claims AND full pipeline
+- `partially-verified`: verified_ratio 0.5-0.79, OR degraded verify, OR `--providers claude`
+- `unverified`: verified_ratio < 0.5, OR verify skipped/failed
+
+**completion_status** — from pipeline execution:
+- `complete`: all stages ran, all P0 sub-questions covered
+- `incomplete`: DIVE had partial success
+- `synthesis_only`: no new research, used existing docs
+- `draft`: contested_ratio > CONTESTED_THRESHOLD (0.3)
+- `cancelled`: user interrupted
+- `no_evidence`: 0 sources, first-principles only
+
+### 5.3 Write synthesis
+
+Following synthesize-guide.md, produce:
+
+1. `output/synthesis.md` — human-readable report with YAML frontmatter
+2. `output/synthesis.json` — structured provenance data (schema per checkpoint-schema.md)
+
+Both written atomically (temp + mv).
+
+### 5.4 Save and report
+
+1. Determine output path:
+   - Custom: `--output <path>` if specified
+   - Default: `docs/research/YYYY-MM-DD-<topic-slug>-<run_id_short>.md`
+   - `<topic-slug>`: lowercase, spaces→hyphens, max 50 chars
+   - `<run_id_short>`: first 4 chars of run_id after timestamp prefix
+
+2. Copy synthesis.md to output path
+
+3. Update run registry (`~/.cache/delve/runs/<run_id>.json`):
+   - `status: "completed"`
+   - `completed_at: "<ISO>"`
+   - `output: "<output path>"`
+
+4. Release lock: `rmdir "$RUN_DIR/.lock"`
+
+5. Log events:
+```json
+{"event": "synthesize_complete", "verification_status": "...", "completion_status": "...", "output_path": "..."}
+{"event": "run_complete", "duration_ms": <total>, "status": "completed"}
+```
+
+6. Present to user:
+
+```
+## Research Complete: <topic>
+
+**Quality:** <verification_status> / <completion_status>
+**Duration:** <total time>s | **Agents:** <count> | **Sources:** <count>
+**Output:** <path>
+
+### Key Findings
+<first 3-5 bullet points from synthesis>
+
+<if contested_ratio > 0>
+### Contested Points (<count>)
+<brief list>
+</if>
+
+Full report: <output path>
+```
