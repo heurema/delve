@@ -27,6 +27,7 @@ Wrap the JSON in a fenced code block with the marker `===OUTPUT_JSON===` on the 
     {
       "text": "one specific, verifiable factual statement",
       "source": "URL or document path where this claim originates",
+      "source_tier": "T1 | T2 | T3",
       "confidence": "high | medium | low"
     }
   ],
@@ -34,7 +35,9 @@ Wrap the JSON in a fenced code block with the marker `===OUTPUT_JSON===` on the 
     {
       "url": "full URL",
       "title": "page title",
-      "accessed": "YYYY-MM-DD"
+      "accessed": "YYYY-MM-DD",
+      "source_tier": "T1 | T2 | T3",
+      "stale": false
     }
   ],
   "confidence": "high | medium | low",
@@ -47,7 +50,9 @@ Guidelines for claims:
 - Each claim must be a single, atomic, verifiable statement
 - Prefer specific numbers, dates, and names over vague assertions
 - Attribute each claim to its primary source
-- high = multiple independent sources agree; medium = one authoritative source; low = single unverified or contradictory sources
+- high = multiple independent sources agree, with at least one T1 or T2 source
+- medium = one authoritative source (T1 or T2)
+- low = single unverified or contradictory sources, OR all sources are T3-only (confidence override: T3-only always = low regardless of count)
 
 ### 2. output.md (human-readable report)
 
@@ -90,3 +95,7 @@ Place the marker `===OUTPUT_MD===` on a line by itself, then write your report:
 - Prefer primary sources over secondary reporting
 - Note recency — flag information older than 1 year if the topic is fast-moving
 - If you cannot find sufficient information, say so explicitly in gaps rather than speculating
+- Annotate each source with its authority tier using the tier classification rules appended to this prompt by the orchestrator
+- Prefer T1 sources. For each claim, attempt to find at least one T1 or T2 source before relying on T3
+- **Confidence override:** If a claim is supported only by T3 sources, set confidence to `low` regardless of source count
+- For sources that appear >12 months old (determine from publication date, "last updated", or year references in content — NOT from `accessed` date), add `"stale": true` to the citation object (citations only — `stale` does not appear in claims)
