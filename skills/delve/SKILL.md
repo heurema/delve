@@ -240,6 +240,8 @@ Proceed to [Stage 3: DIVE](#stage-3-dive).
 
 Read `references/dive-prompt.md` once.
 
+Read `references/source-authority-rules.md` once. Append its content to each dive prompt before dispatch.
+
 For each non-skipped sub-question from sub-tasks.json:
 1. Build the full prompt: dive-prompt.md content + sub-question details + relevant sources from scan/result.json
 2. Write frozen prompt to `dive/q_<hash>/prompt.md` (for resume auditability)
@@ -327,6 +329,8 @@ Touch `dive.done`.
 
 Read `references/claim-extraction-prompt.md`.
 
+Read `references/source-authority-rules.md` for tier classification context.
+
 Collect all `dive/q_*/output.json` files (only from completed workers).
 
 Following the claim extraction prompt, decompose dive outputs into atomic claims. Pass `MAX_CLAIMS` for current depth (shallow=20, medium=35, deep=60) as the extraction limit.
@@ -359,6 +363,8 @@ If `--providers claude`: all verification agents are Claude subagents. Cap verif
 ### 4.3 Verification (parallel subagents)
 
 Read `references/verify-prompt.md`.
+
+Read `references/source-authority-rules.md` once. Append its content to each verify prompt before dispatch.
 
 Batch claims for efficiency:
 - Simple factual claims: batches of 5-10
@@ -416,11 +422,13 @@ Gather all completed artifacts:
 
 Read `references/synthesize-guide.md` for merge instructions.
 
+Read `references/source-authority-rules.md` for tier definitions.
+
 ### 5.2 Determine quality labels
 
-**verification_status** — from verify/summary.json (uses `verified_ratio`, NOT `coverage`):
-- `verified`: verified_ratio ≥ 0.8 AND 0 rejected among P0-sourced claims AND full pipeline
-- `partially-verified`: verified_ratio 0.5-0.79, OR degraded verify, OR `--providers claude`
+**verification_status** — uses `verified_ratio` from verify/summary.json + T1/T2 backing from per-verdict files:
+- `verified`: verified_ratio ≥ 0.8 AND 0 rejected among P0-sourced claims AND >50% of verified claims backed by at least one T1 or T2 source (computed by iterating `verify/verdicts/c_*.json` and checking `source_tiers` arrays) AND full pipeline ran
+- `partially-verified`: verified_ratio 0.5-0.79, OR degraded verify, OR `--providers claude`, OR ≤50% of verified claims have T1/T2 backing
 - `unverified`: verified_ratio < 0.5, OR verify skipped/failed
 
 **completion_status** — from pipeline execution:
