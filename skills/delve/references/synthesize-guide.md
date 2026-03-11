@@ -30,6 +30,15 @@ Merge research outputs from multiple dive agents and annotate with verification 
 - If 3 articles all cite the same press release → count as 1 source, not 3
 - Note when a finding relies on a single source vs. multiple independent confirmations
 - Prefer findings backed by independent sources
+- Annotate each source in the Sources section with its tier: `[1] [T1] Title — URL`
+- In Key Findings, prioritize findings backed by T1 sources
+- Add tier distribution to Methodology section: `Source quality: X T1, Y T2, Z T3`
+
+### Confidence resolution
+
+If a claim was `low` confidence in DIVE (T3-only) but VERIFY found T1/T2 evidence and marked it `verified`, treat it as verified. The VERIFY verdict overrides DIVE confidence for synthesis purposes.
+
+The synthesizer trusts the `stale` flag from DIVE citations as-is — it does NOT recompute staleness.
 
 ### Quality over quantity
 
@@ -73,7 +82,7 @@ present contradicting evidence, note which sources are more authoritative.>
 
 ## Sources
 
-<Numbered list. Include URL, title, access date.
+<Numbered list with tier annotation. Format: [N] [T1] Title — URL (accessed YYYY-MM-DD)
 Mark sources as: primary / secondary / aggregator.>
 
 ## Methodology
@@ -83,14 +92,20 @@ Mark sources as: primary / secondary / aggregator.>
 - **Duration:** <total time>
 - **Quality:** <verification_status> / <completion_status>
 - **Claims:** <verified>/<total> verified, <contested> contested, <rejected> rejected
+- **Source quality:** X T1, Y T2, Z T3
 ```
 
 ### Determining quality labels
 
 **verification_status:**
-- `verified`: ≥80% claims verified, 0 rejected among P0-sourced claims, full pipeline
-- `partially-verified`: 50-79% verified, or verify was degraded, or `--providers claude`
-- `unverified`: <50% verified, verify skipped, or verify failed
+
+| Status | Conditions (ALL must be true) |
+|--------|-------------------------------|
+| `verified` | >=80% claims verified AND 0 rejected P0 claims AND >50% of verified claims backed by at least one T1 or T2 source AND full pipeline ran |
+| `partially-verified` | 50-79% verified, OR verify degraded, OR `--providers claude`, OR <=50% of verified claims have T1/T2 backing |
+| `unverified` | <50% verified, verify skipped, or verify failed |
+
+**`--quick` mode:** `--quick` skips DIVE and VERIFY. No tier annotations exist. `verification_status` is always `unverified`. Tier conditions only apply when the full pipeline ran.
 
 **completion_status:**
 - `complete`: all stages ran, all P0 sub-questions covered
