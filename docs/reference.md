@@ -59,8 +59,8 @@ Report sections: Key Findings, Contested Points, Gaps & Open Questions, Sources,
 ## Quality labels
 
 **verification_status** (uses `verified_ratio`, not `coverage`):
-- `verified`: verified_ratio >= 0.8, 0 rejected among P0 claims, full pipeline
-- `partially-verified`: 0.5-0.79, or degraded verify, or `--providers claude`
+- `verified`: verified_ratio >= 0.8, 0 rejected among P0 claims, >50% verified claims backed by T1/T2 sources, full pipeline
+- `partially-verified`: 0.5-0.79, or degraded verify, or `--providers claude`, or ≤50% T1/T2 backing
 - `unverified`: < 0.5, or verify skipped/failed
 
 **completion_status:**

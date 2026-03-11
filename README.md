@@ -5,7 +5,7 @@
 **Autonomous deep research with claim-level verification**
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-5b21b6?style=flat-square)](https://skill7.dev/plugins/delve)
-[![Version](https://img.shields.io/badge/version-0.2.0-5b21b6?style=flat-square)](https://github.com/heurema/delve)
+[![Version](https://img.shields.io/badge/version-0.3.0-5b21b6?style=flat-square)](https://github.com/heurema/delve)
 [![License MIT](https://img.shields.io/badge/license-MIT-5b21b6?style=flat-square)](LICENSE)
 
 ```bash

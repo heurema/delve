@@ -24,9 +24,9 @@ User -> SKILL.md orchestrator
 
 2. **DECOMPOSE** breaks the topic into sub-questions with priority levels (P0/P1/P2). Each gets a deterministic `q_<hash>` ID. User approves the decomposition before proceeding.
 
-3. **DIVE** dispatches parallel research agents (one per sub-question). Each agent follows `references/dive-prompt.md`, produces structured `output.json` + human-readable `output.md`. Agents run in background via the Agent tool.
+3. **DIVE** dispatches parallel research agents (one per sub-question). Each agent follows `references/dive-prompt.md` + `references/source-authority-rules.md` (tier classification), produces structured `output.json` + human-readable `output.md` with source tier annotations (T1/T2/T3). Agents run in background via the Agent tool.
 
-4. **VERIFY** extracts atomic claims from DIVE outputs, assigns `c_<hash>` IDs, then dispatches adversarial verification agents. Verifiers receive `original_sources` per claim to detect press-release amplification. Each claim gets a verdict: verified / contested / rejected / uncertain.
+4. **VERIFY** extracts atomic claims from DIVE outputs (with source tiers), assigns `c_<hash>` IDs, then dispatches adversarial verification agents with tier classification rules. Verifiers receive `original_sources` + `original_source_tiers` per claim. Tier-weighted verdict criteria: 1×T1 or 2×T2 for `verified`; T3-only → `uncertain`. Each claim gets a verdict: verified / contested / rejected / uncertain.
 
 5. **SYNTHESIZE** merges all outputs following `references/synthesize-guide.md`. Determines quality labels (`verification_status` using `verified_ratio`, `completion_status` from pipeline execution). Produces the final `synthesis.md` report.
 

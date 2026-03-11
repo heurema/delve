@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0] - 2026-03-11
+
+### Added
+- 3-tier source credibility scoring (T1/T2/T3) across all pipeline stages
+- New `references/source-authority-rules.md` — shared tier classification rules
+- `source_tier` field in dive output claims and citations
+- `stale` boolean in dive citations for sources >12 months old
+- `source_tiers` parallel array in verify verdicts
+- `original_source_tiers` in claim extraction output
+- Tier annotations in synthesis report sources: `[N] [T1] Title — URL`
+- Tier distribution in synthesis methodology section
+
+### Changed
+- `verification_status: verified` now requires >50% of verified claims backed by T1/T2 sources
+- T3-only claims forced to `low` confidence in DIVE
+- T3-only evidence cannot produce `verified` verdict in VERIFY (→ `uncertain`)
+- Synthesize quality labels table replaces prose definitions
+
 ## [0.2.0] - 2026-03-10
 
 ### Changed
