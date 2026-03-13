@@ -294,8 +294,8 @@ Output structure:
 | Label | Condition |
 |-------|-----------|
 | `verified` | ≥80% claims verified, 0 failed P0, >50% verified claims backed by T1/T2 sources, pipeline complete |
-| `partially-verified` | 50-79% coverage, or degraded verify, or ≤50% T1/T2 backing |
-| `unverified` | <50% coverage, verify skipped, or failed |
+| `partially-verified` | 50-79% verified_ratio, or degraded verify, or ≤50% T1/T2 backing |
+| `unverified` | <50% verified_ratio, verify skipped, or failed |
 
 **Completion status:**
 | Label | Condition |

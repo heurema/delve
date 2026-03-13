@@ -37,7 +37,7 @@ Wrap the JSON in a fenced code block with the marker `===OUTPUT_JSON===` on the 
       "title": "page title",
       "accessed": "YYYY-MM-DD",
       "source_tier": "T1 | T2 | T3",
-      "stale": false
+      "stale": "boolean — true if source >12 months old"
     }
   ],
   "confidence": "high | medium | low",
