@@ -18,7 +18,12 @@ You will receive multiple `output.json` files from research agents, each contain
 3. **Deduplicate** — If the same claim appears in multiple outputs from different sub-questions, keep ONE instance but record all source_questions.
 4. **Source independence check** — If multiple claims trace to the same original URL or source document, note this. Three articles quoting the same press release = one source, not three.
 5. **Assign priority** — `high` for claims central to the research topic, `medium` for supporting claims, `low` for peripheral claims.
-6. **Do NOT generate IDs** — The orchestrator will assign `c_<hash>` IDs after receiving your output. Use sequential placeholder keys (`claim_1`, `claim_2`, ...) in your output.
+6. **Propagate source tiers** — For each claim, carry over the `source_tier` from the originating dive output's claim. When deduplicating claims from multiple dive outputs with different tiers:
+   - Preserve all source URLs and their tiers
+   - `original_source_tiers[i]` corresponds to `original_sources[i]` (same length, index-aligned)
+   - Sort highest tier first (T1 > T2 > T3) when ordering the arrays
+   - If the same claim has `source_tier: "T1"` in one dive output and `source_tier: "T3"` in another, the deduplicated claim gets `original_sources: ["url_T1", "url_T3"]` and `original_source_tiers: ["T1", "T3"]`
+7. **Do NOT generate IDs** — The orchestrator will assign `c_<hash>` IDs after receiving your output. Use sequential placeholder keys (`claim_1`, `claim_2`, ...) in your output.
 
 ## Output
 
@@ -32,6 +37,7 @@ Return a JSON object with claims keyed by sequential placeholders. The orchestra
       "type": "factual",
       "source_questions": ["q_abc123", "q_def456"],
       "original_sources": ["https://example.com/article"],
+      "original_source_tiers": ["T2"],
       "priority": "high"
     }
   },

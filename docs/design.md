@@ -172,13 +172,13 @@ Output: verify/claims.json + verify/verdicts/c_<hash>.json
 ```
 
 **Step 4a: Claim Extraction** (inline, explicit):
-- Prompt from `references/claim-extraction-prompt.md`
+- Prompt from `references/claim-extraction-prompt.md` + `references/source-authority-rules.md`
 - Decompose all dive outputs into atomic claims → `claims.json`
 - Classify: factual, opinion, methodology, quantitative, time-sensitive
 - Source independence check: deduplicate claims from same original source
 
 **Step 4b: Verification** (parallel subagents):
-- Prompt from `references/verify-prompt.md`: adversarial, "find flaws not confirm"
+- Prompt from `references/verify-prompt.md` + `references/source-authority-rules.md`: adversarial, "find flaws not confirm", tier-weighted verdicts
 - Batch by topic (5-10 simple factual, 1-3 quantitative/high-impact)
 - Verifiers work independently from synthesis (no anchoring)
 - Verdict per claim: `verified` / `contested` / `rejected` / `uncertain`
@@ -293,9 +293,9 @@ Output structure:
 **Verification status:**
 | Label | Condition |
 |-------|-----------|
-| `verified` | ≥80% claims verified, 0 failed P0, pipeline complete |
-| `partially-verified` | 50-79% coverage or degraded verify |
-| `unverified` | <50% coverage, verify skipped, or failed |
+| `verified` | ≥80% claims verified, 0 failed P0, >50% verified claims backed by T1/T2 sources, pipeline complete |
+| `partially-verified` | 50-79% verified_ratio, or degraded verify, or ≤50% T1/T2 backing |
+| `unverified` | <50% verified_ratio, verify skipped, or failed |
 
 **Completion status:**
 | Label | Condition |

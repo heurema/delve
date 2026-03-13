@@ -129,11 +129,18 @@ Hash: first 6 hex chars of SHA-256 of question text (lowercase).
     {
       "text": "string — one verifiable factual statement",
       "source": "string — URL or doc path",
+      "source_tier": "T1 | T2 | T3",
       "confidence": "high | medium | low"
     }
   ],
   "citations": [
-    {"url": "string", "title": "string", "accessed": "ISO date"}
+    {
+      "url": "string",
+      "title": "string",
+      "accessed": "ISO date",
+      "source_tier": "T1 | T2 | T3",
+      "stale": "boolean — true if source appears >12 months old (agent-assessed from content)"
+    }
   ],
   "confidence": "high | medium | low — overall assessment",
   "gaps": ["string — areas needing further research"],
@@ -167,6 +174,7 @@ Hash: first 6 hex chars of SHA-256 of question text (lowercase).
       "type": "factual | opinion | methodology | quantitative | time-sensitive",
       "source_questions": ["q_<hash>"],
       "original_sources": ["string — URL or path"],
+      "original_source_tiers": ["T1 | T2 | T3 — parallel array, [i] corresponds to original_sources[i]"],
       "priority": "high | medium | low"
     }
   },
@@ -186,6 +194,7 @@ Hash: first 6 hex chars of SHA-256 of claim text (lowercase).
   "verdict": "verified | contested | rejected | uncertain",
   "evidence": "string — supporting or contradicting evidence",
   "sources": ["string — verification source URLs"],
+  "source_tiers": ["T1 | T2 | T3 — parallel array, [i] corresponds to sources[i]"],
   "notes": "string | null"
 }
 ```
