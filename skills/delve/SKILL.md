@@ -23,9 +23,12 @@ Match the user's `/delve` invocation:
 - `--depth shallow|medium|deep` — agent intensity (default: `medium`)
 - `--providers claude` — sensitivity routing, blocks external models
 - `--output <path>` — custom output path for synthesis.md
+- `--no-context` — skip Stage 0.5 entirely; no context enrichment, no context.json written
+- `--broad` — skip project scoping; search broadly without constraining to matched project
 
 **Conflicts:**
 - `--quick` + `--depth` → ignore depth (quick always skips dive/verify)
+- `--no-context` + `--broad` → `--no-context` takes precedence (Stage 0.5 skipped entirely)
 
 ## Constants
 
@@ -121,6 +124,44 @@ Starting deep research: <topic>
 Depth: <depth> | Run: <run_id>
 ```
 
+Proceed to [Stage 0.5: CONTEXTUALIZE](#stage-05-contextualize).
+
+## Stage 0.5: CONTEXTUALIZE
+
+**Inline, ~2-5s. No subagents.** Skip entirely if `--no-context` is active (pass raw topic to SCAN).
+
+Build a `context_pack` that enriches the user's query with local project signals before SCAN begins.
+
+**Tier 1 (always):** Extract project from cwd via prefix matching — `~/works/fjx/`→`fjx`, `~/works/itools/`→`itools`, `~/personal/`→`personal`, `~/contrib/`→`contrib`, `~/vicc/`→`vicc`. Read git branch: `git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "none"` (graceful: returns `"none"` in non-git dirs or detached HEAD). If `--broad` active, set `project.name: null` (skip project scoping). If no prefix matches (e.g. unmapped path like `/tmp/`), graceful fallback: set `project.name: null`, do not error — proceed without project context.
+
+**Tier 2 (deferred to Phase 2):** Project entity matching via `bank/entities/*.md` — not in MVP. Will provide `project.stack` once implemented. In MVP, `stack` is always `null`.
+
+**Tier 3 (always for delve):** Scan `docs/research/*.md` from the **project root** (detected via `git rev-parse --show-toplevel 2>/dev/null || pwd`) for prior work — NOT from cwd, which may be a subdirectory. Simple grep/awk pass — look for `date: YYYY-MM-DD` in first 10 lines of each file. For files where topic keywords appear in filename or first 50 lines, record `{path, date, relevance}`. **Note:** Stage 1.1 uses `context_pack.prior_research` instead of re-scanning docs/research/.
+
+**Output — write `$RUN_DIR/context.json` (atomic: temp + mv):**
+```json
+{
+  "query_original": "<raw topic from user>",
+  "query_enriched": "<topic with project hint appended when project detected>",
+  "project": {"name": "<project or null>", "path": "<matched prefix or null>"},
+  "git_branch": "<branch name or 'none'>",
+  "prior_research": [{"path": "docs/research/YYYY-MM-DD-topic.md", "date": "YYYY-MM-DD", "relevance": "high"}],
+  "assumptions": ["Scoped to <project> based on cwd <cwd>", "Prior research exists from <date>"],
+  "confidence": 0.85,
+  "tier_used": 3,
+  "ambiguity_detected": false
+}
+```
+
+`query_enriched`: append project hint when `project.name` non-null and `--broad` not active. `tier_used`: `1` (Tier 3 found 0 matches) or `3` (prior_research populated with ≥1 match).
+
+**Assumption display UX:** When `assumptions` non-empty and `ambiguity_detected` false — show one-line summary: `Context: <project> | prior research: <N> file(s). Override? [enter=ok]`. When `confidence` < 0.6 or `ambiguity_detected` true — ask user to disambiguate before SCAN. When `project.name` null and no prior_research — proceed silently.
+
+**Log event:**
+```json
+{"event": "contextualize_complete", "tier_used": 3, "project": "<name or null>", "prior_research_count": 2, "ambiguity_detected": false, "ts": "<ISO>"}
+```
+
 Proceed to [Stage 1: SCAN](#stage-1-scan).
 
 ## Stage 1: SCAN
@@ -129,7 +170,9 @@ Proceed to [Stage 1: SCAN](#stage-1-scan).
 
 ### 1.1 Check existing research
 
-Search for prior work on this topic:
+If `context_pack.prior_research` is populated (from Stage 0.5), use it directly — do not re-scan docs/research/. The enriched query from Stage 0.5 (`context_pack.query_enriched`) is used for all subsequent web searches in this stage.
+
+If Stage 0.5 was skipped (`--no-context`) or `context_pack.prior_research` is empty, fall back to a fresh scan:
 
 ```
 Glob: docs/research/*<topic-keywords>*.md
