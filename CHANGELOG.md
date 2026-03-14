@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.0] - 2026-03-14
+
+### Added
+- Tier 2 entity matching: reads bank/entities/*.md for project stack, key_projects, conventions
+- Sub-project matching for ~/personal/ (skill7→heurema, forgequant→forgequant entities)
+- Contrarian agent dispatch: when source overlap > 0.6, dispatches additional DIVE agent with blacklisted URLs, forced alternative viewpoint, and query reformulation
+- `contrarian_complete` event (separate from dive_complete)
+- Initial status.json for contrarian worker (pending state before dispatch)
+- Resume protocol handles contrarian pending/error/timeout states
+- Cache validity for contrarian includes worker output dependency (not just prompt hash)
+
+### Changed
+- context_pack.project now includes stack and entity_file fields
+- query_enriched appends project + stack hint
+- tier_used reflects highest tier that produced data (1/2/3)
+- Assumption display shows stack: `Context: <project> (<stack>) | prior research: <N> file(s)`
+- contextualize_complete event includes stack field
+
 ## [0.5.0] - 2026-03-14
 
 ### Added
