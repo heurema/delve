@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0] - 2026-03-14
+
+### Added
+- Stage 0.5: CONTEXTUALIZE — tiered local context enrichment before SCAN
+- Tier 1: cwd→project mapping (fjx, itools, personal, contrib, vicc) + git branch detection
+- Tier 3: docs/research/*.md frontmatter scan for prior work (from project root, not cwd)
+- context_pack output (context.json) with query_original, query_enriched, project, git_branch, prior_research, assumptions, confidence
+- Assumption display UX: one-line summary when confident, disambiguation prompt when ambiguous
+- New flags: `--no-context` (skip Stage 0.5 entirely), `--broad` (skip project scoping)
+
+### Changed
+- Stage 1.1 uses context_pack.prior_research instead of re-scanning docs/research/
+- Tier 2 (entity matching for project.stack) explicitly deferred to Phase 2
+
 ## [0.4.0] - 2026-03-14
 
 ### Added
