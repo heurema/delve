@@ -51,7 +51,9 @@ Events:
 - `dive_complete` — `{completed, failed, coverage}`
 - `claim_extraction_complete` — `{total_claims, by_type}`
 - `verify_complete` — `{verified, contested, rejected, uncertain}`
-- `synthesize_complete` — `{verification_status, completion_status, output_path}`
+- `overlap_analysis_complete` — `{avg_overlap_ratio, pair_count}` — emitted after Stage 3.5 source overlap detection
+- `source_saturation_detected` — `{overlap_ratio, pairs_affected}` — emitted when avg_overlap_ratio > 0.6 (warning only)
+- `synthesize_complete` — `{verification_status, completion_status, composite_score, output_path}`
 - `run_complete` — `{duration_ms, status}`
 - `run_aborted` — `{reason, stage}`
 - `run_cancelled` — `{stage}`

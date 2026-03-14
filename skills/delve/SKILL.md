@@ -46,6 +46,20 @@ Depth → parallelism:
 | medium | 3-4 | 4 |
 | deep | 5-6 | 6 |
 
+## Prompt Mutability
+
+Prompts are classified as FROZEN or MUTABLE. This mirrors autoresearch's prepare.py (frozen evaluator) vs train.py (mutable code) pattern: frozen prompts are the stable evaluation contract; mutable prompts are the tunable research driver.
+
+**FROZEN** — do not modify without invalidating all cached runs:
+- `verify-prompt.md` — adversarial verification instructions; changes would alter claim verdicts
+- `claim-extraction-prompt.md` — extraction schema contract; changes would alter claim IDs
+- `synthesize-guide.md` — output format contract; changes would alter synthesis structure
+- `security-policy.md` — security constraints; changes require explicit security review
+- `source-authority-rules.md` — tier classification used in both DIVE and VERIFY; changes alter source scoring
+
+**MUTABLE** — may be tuned per-run or updated freely:
+- `dive-prompt.md` — research driver; cache validity checked per-worker via `prompt_hash` in status.json
+
 ## Run Initialization
 
 Before any stage:
@@ -317,6 +331,42 @@ coverage = sum(P_WEIGHTS[task.priority] for task in completed) / sum(P_WEIGHTS[t
 Log event: `{"event": "dive_complete", "completed": N, "failed": N, "coverage": 0.85}`.
 Touch `dive.done`.
 
+## Stage 3.5: Source Overlap Detection
+
+**Inline, before claim extraction. Runs only when 2+ DIVE workers completed.**
+
+For each pair of completed workers (all `dive/q_*/output.json` files):
+
+1. Extract all `citations[].url` values from both workers
+2. For each URL, extract its root domain: scheme + netloc only (e.g., `https://arxiv.org/html/2502.14693` → `https://arxiv.org`, `https://example.com/search?q=foo` → `https://example.com`)
+3. Compute Jaccard similarity for the pair:
+   ```
+   intersection = |set(root_domains_A) ∩ set(root_domains_B)|
+   union = |set(root_domains_A) ∪ set(root_domains_B)|
+   jaccard = intersection / union  (0 if union == 0)
+   ```
+4. Compute average overlap across all pairs:
+   ```
+   avg_overlap_ratio = sum(jaccard_per_pair) / pair_count
+   ```
+
+Log event:
+```json
+{"event": "overlap_analysis_complete", "run_id": "<id>", "avg_overlap_ratio": <float>, "pair_count": <int>, "ts": "<ISO>"}
+```
+
+If `avg_overlap_ratio > 0.6`, log warning event:
+```json
+{"event": "source_saturation_detected", "run_id": "<id>", "overlap_ratio": <float>, "pairs_affected": <count_of_pairs_above_0.6>, "ts": "<ISO>"}
+```
+
+Source saturation is informational only — it does not abort or modify the run. It signals that agents may be drawing from overlapping source pools, which could reduce the diversity of evidence.
+
+If fewer than 2 workers completed, log the event with zeroed fields and skip pairwise analysis:
+```json
+{"event": "overlap_analysis_complete", "run_id": "<id>", "avg_overlap_ratio": 0, "pair_count": 0, "ts": "<ISO>"}
+```
+
 ## Stage 4: VERIFY
 
 **Claim extraction (inline) + adversarial verification (parallel subagents), ~60-120s.**
@@ -424,6 +474,23 @@ Read `references/synthesize-guide.md` for merge instructions.
 
 Read `references/source-authority-rules.md` for tier definitions.
 
+**Metric collection for composite quality score:**
+
+- `verified_ratio`: read from `verify/summary.json` → `verified / total`. If VERIFY was skipped or summary.json does not exist, `verified_ratio = 0`.
+
+- `source_independence_ratio`: for all completed `dive/q_*/output.json` files, collect all `citations[].url` values. For each URL extract root domain (scheme + netloc only, e.g. `https://arxiv.org/html/2502.14693` → `https://arxiv.org`). Compute `unique_root_domains / total_url_count`. If no citations exist, `source_independence_ratio = 0`.
+
+- `p0_coverage`: if `decompose/sub-tasks.json` does not exist (e.g. `--quick` or `reuse` gate), set `p0_coverage = 0`. Otherwise, count total P0 sub-questions (`total_p0`). If `total_p0 = 0`, `p0_coverage = 0`. For each P0 sub-question, check if it has at least one verified claim:
+  - If VERIFY ran: look up the P0 task id in `verify/claims.json` → find claims where `source_questions` includes that task id → check their verdicts in `verify/verdicts/c_<hash>.json` — a claim counts if `verdict = "verified"`
+  - If VERIFY skipped: check `dive/q_<hash>/output.json` → `claims` — a claim counts if `confidence = "high"`
+  - `p0_coverage = p0_with_verified_claim / total_p0`.
+
+**Composite quality score:**
+```
+composite_score = (verified_ratio * 3 + source_independence_ratio * 2 + p0_coverage * 2) / 7
+```
+Result is float in [0, 1].
+
 ### 5.2 Determine quality labels
 
 **verification_status** — uses `verified_ratio` from verify/summary.json + T1/T2 backing from per-verdict files:
@@ -469,7 +536,7 @@ Both written atomically (temp + mv).
 
 5. Log events:
 ```json
-{"event": "synthesize_complete", "verification_status": "...", "completion_status": "...", "output_path": "..."}
+{"event": "synthesize_complete", "verification_status": "...", "completion_status": "...", "composite_score": <float 0-1>, "output_path": "..."}
 {"event": "run_complete", "duration_ms": <total>, "status": "completed"}
 ```
 
@@ -558,7 +625,11 @@ Mismatch on any → invalidate that worker and all downstream stages (verify + s
 - Compare SHA-256 of current prompt file vs hash stored in events.jsonl `claim_extraction_complete` event
 - Mismatch → delete `verify/claims.json` + all `verify/verdicts/c_*.json` + `verify.done`, re-run VERIFY from scratch
 
-**Downstream cascade:** Any invalidated DIVE worker → invalidate all VERIFY + SYNTHESIZE. Any invalidated VERIFY → invalidate SYNTHESIZE.
+**SYNTHESIZE artifacts:** If `synthesize-guide.md` or `security-policy.md` changed since last run:
+- Compare SHA-256 of current prompt file vs hash stored in events.jsonl `synthesize_complete` event
+- Mismatch → delete `output/synthesis.md` + `output/synthesis.json` + `synthesize.done`, re-run SYNTHESIZE
+
+**Downstream cascade:** Any invalidated DIVE worker → invalidate all VERIFY + SYNTHESIZE. Any invalidated VERIFY → invalidate SYNTHESIZE. Any FROZEN prompt change (see Prompt Mutability) → invalidate its stage and all downstream.
 
 Log event: `{"event": "resume_started", "from_stage": "<stage>", "rerun_tasks": ["q_..."]}`.
 

@@ -62,6 +62,7 @@ completion: <complete | incomplete | synthesis_only | draft | cancelled | no_evi
 sources: <count>
 claims_verified: <count>
 claims_contested: <count>
+composite_score: <float 0-1 — weighted quality score: (verified_ratio*3 + source_independence_ratio*2 + p0_coverage*2)/7>
 ---
 
 # <Topic> — Deep Research
