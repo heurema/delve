@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0] - 2026-03-14
+
+### Added
+- Composite quality score: weighted metric (verified_ratio×3 + source_independence×2 + p0_coverage×2) / 7, logged to events.jsonl and synthesis.md frontmatter
+- Prompt Mutability section: FROZEN (verify-prompt, claim-extraction, synthesize-guide, security-policy, source-authority-rules) vs MUTABLE (dive-prompt)
+- Stage 3.5: source overlap detection via Jaccard similarity across DIVE agent citations
+- `source_saturation_detected` warning event when avg overlap > 0.6
+- Cache invalidation for FROZEN prompt changes (synthesize-guide, security-policy)
+- `overlap_analysis_complete` and `source_saturation_detected` event types in checkpoint schema
+
+### Changed
+- Root domain extraction uses scheme+netloc only (was scheme+netloc+path) for both overlap detection and source independence
+- `p0_coverage` lookup uses `verify/claims.json` for source_questions mapping (was incorrectly referencing verdict files)
+- `p0_coverage` defaults to 0 when `decompose/sub-tasks.json` missing (--quick, reuse modes) or when total_p0=0
+- Single-worker runs log `overlap_analysis_complete` with zeroed fields instead of silently skipping
+
 ## [0.3.0] - 2026-03-11
 
 ### Added
