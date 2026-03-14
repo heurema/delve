@@ -134,7 +134,16 @@ Build a `context_pack` that enriches the user's query with local project signals
 
 **Tier 1 (always):** Extract project from cwd via prefix matching — `~/works/fjx/`→`fjx`, `~/works/itools/`→`itools`, `~/personal/`→`personal`, `~/contrib/`→`contrib`, `~/vicc/`→`vicc`. Read git branch: `git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "none"` (graceful: returns `"none"` in non-git dirs or detached HEAD). If `--broad` active, set `project.name: null` (skip project scoping). If no prefix matches (e.g. unmapped path like `/tmp/`), graceful fallback: set `project.name: null`, do not error — proceed without project context.
 
-**Tier 2 (deferred to Phase 2):** Project entity matching via `bank/entities/*.md` — not in MVP. Will provide `project.stack` once implemented. In MVP, `stack` is always `null`.
+**Tier 2 (if project detected and not `--no-context`):** Read entity file `bank/entities/<project.name>.md` from vicc memory bank (`~/vicc/.claude/memory/bank/entities/`). Extract:
+- `stack` — from "Stack:" line or "## Overview" section (e.g. "Python, Odoo, Docker")
+- `key_projects` — from tables or lists in the entity file (e.g. "argus, docmind, hiya")
+- `conventions` — from "## Key Decisions" or "## Architecture Notes" sections
+
+If entity file not found (e.g. project=`contrib` with no entity file), set `stack: null` — do not error.
+
+If `project.name` is `personal`, check if cwd matches a sub-project (e.g. `~/personal/skill7/` → read `heurema.md` entity, `~/personal/forgequant/` → read `forgequant.md` entity). Use longest prefix match.
+
+Append extracted stack to `query_enriched` (e.g. "auth middleware" → "auth middleware (Python, Odoo 18)"). Add to assumptions: "Stack: <stack> from entity <file>".
 
 **Tier 3 (always for delve):** Scan `docs/research/*.md` from the **project root** (detected via `git rev-parse --show-toplevel 2>/dev/null || pwd`) for prior work — NOT from cwd, which may be a subdirectory. Simple grep/awk pass — look for `date: YYYY-MM-DD` in first 10 lines of each file. For files where topic keywords appear in filename or first 50 lines, record `{path, date, relevance}`. **Note:** Stage 1.1 uses `context_pack.prior_research` instead of re-scanning docs/research/.
 
@@ -143,7 +152,7 @@ Build a `context_pack` that enriches the user's query with local project signals
 {
   "query_original": "<raw topic from user>",
   "query_enriched": "<topic with project hint appended when project detected>",
-  "project": {"name": "<project or null>", "path": "<matched prefix or null>"},
+  "project": {"name": "<project or null>", "path": "<matched prefix or null>", "stack": "<stack from entity or null>", "entity_file": "<path to entity .md or null>"},
   "git_branch": "<branch name or 'none'>",
   "prior_research": [{"path": "docs/research/YYYY-MM-DD-topic.md", "date": "YYYY-MM-DD", "relevance": "high"}],
   "assumptions": ["Scoped to <project> based on cwd <cwd>", "Prior research exists from <date>"],
@@ -153,13 +162,13 @@ Build a `context_pack` that enriches the user's query with local project signals
 }
 ```
 
-`query_enriched`: append project hint when `project.name` non-null and `--broad` not active. `tier_used`: `1` (Tier 3 found 0 matches) or `3` (prior_research populated with ≥1 match).
+`query_enriched`: append project + stack hint when `project.name` non-null and `--broad` not active. `tier_used`: highest tier that produced data (`1` = cwd only, `2` = entity matched, `3` = prior research found).
 
-**Assumption display UX:** When `assumptions` non-empty and `ambiguity_detected` false — show one-line summary: `Context: <project> | prior research: <N> file(s). Override? [enter=ok]`. When `confidence` < 0.6 or `ambiguity_detected` true — ask user to disambiguate before SCAN. When `project.name` null and no prior_research — proceed silently.
+**Assumption display UX:** When `assumptions` non-empty and `ambiguity_detected` false — show one-line summary: `Context: <project> (<stack>) | prior research: <N> file(s). Override? [enter=ok]`. When `confidence` < 0.6 or `ambiguity_detected` true — ask user to disambiguate before SCAN. When `project.name` null and no prior_research — proceed silently.
 
 **Log event:**
 ```json
-{"event": "contextualize_complete", "tier_used": 3, "project": "<name or null>", "prior_research_count": 2, "ambiguity_detected": false, "ts": "<ISO>"}
+{"event": "contextualize_complete", "tier_used": 3, "project": "<name or null>", "stack": "<stack or null>", "prior_research_count": 2, "ambiguity_detected": false, "ts": "<ISO>"}
 ```
 
 Proceed to [Stage 1: SCAN](#stage-1-scan).
