@@ -419,6 +419,112 @@ If fewer than 2 workers completed, log the event with zeroed fields and skip pai
 {"event": "overlap_analysis_complete", "run_id": "<id>", "avg_overlap_ratio": 0, "pair_count": 0, "ts": "<ISO>"}
 ```
 
+### Contrarian Agent Dispatch
+
+**Trigger condition:** `avg_overlap_ratio > 0.6` AND 2+ DIVE workers completed.
+
+Contrarian dispatch is NOT triggered if fewer than 2 workers completed or if `avg_overlap_ratio <= 0.6`.
+
+If the trigger condition is met, proceed with the following steps:
+
+**Step 1 — Collect all citation URLs from completed DIVE workers (blacklist construction):**
+
+Iterate over every completed `dive/q_*/output.json` (excluding any existing `q_contrarian`). For each file, read `citations[].url`. Extract root domain (scheme + netloc only, e.g. `https://arxiv.org/html/2502.14693` → `https://arxiv.org`). Collect all root domains into a deduplicated blacklist array.
+
+```json
+// NOTE: the following insights/sources have been proposed before (I-MCTS pattern).
+// These root domains were already found in completed DIVE workers. Contrarian agent must NOT cite them.
+["https://arxiv.org", "https://github.com", "https://example.com"]
+```
+
+Dedup the blacklist (JSON array of unique root domain strings, sorted ascending).
+
+**Step 2 — Build contrarian prompt:**
+
+Base prompt: read `references/dive-prompt.md` content (unmodified — do not edit this frozen-adjacent file).
+
+Append injected blacklist section with the exact heading and phrasing:
+
+```
+### Injected blacklist (contrarian agent only)
+
+These URLs were already found. Do NOT cite them:
+<blacklist as JSON array>
+
+Find critiques, alternative approaches, sources from different domains/industries, academic papers if blogs dominate (or vice versa).
+
+For every search query, append: "criticism OR alternative OR comparison"
+```
+
+Append `references/source-authority-rules.md` content (same as other DIVE agents).
+
+Set task id: `q_contrarian`. Include the original research topic and all sub-questions from `decompose/sub-tasks.json` as context (same as regular DIVE workers).
+
+The contrarian agent MUST NOT cite URLs whose root domain appeared in the blacklist — this is a contract expectation. If output.json citations contain any blacklisted root domains, this is a contract violation. The SKILL.md states this expectation clearly; enforcement is the Agent's responsibility. If violations are detected during synthesis or audit stages, log an event flagging this.
+
+**Step 3 — Dispatch contrarian agent:**
+
+```
+Agent tool:
+  subagent_type: general-purpose
+  run_in_background: false
+  timeout: 120000
+  prompt: <contrarian prompt constructed above>
+```
+
+`run_in_background: false` — contrarian agent runs sequentially and MUST complete before VERIFY begins.
+
+Write initial status before dispatch (same schema as regular DIVE workers):
+```json
+// dive/q_contrarian/status.json (before dispatch)
+{"status": "pending", "attempt_id": 1, "started_at": "<ISO>", "prompt_hash": "<SHA-256 of dive-prompt.md>", "input_hash": "<SHA-256 of full contrarian prompt>"}
+```
+
+Log event immediately before dispatch:
+```json
+{"event": "contrarian_agent_dispatched", "run_id": "<id>", "ts": "<ISO>", "blacklist_size": <int>, "source_count_overall": <int>}
+```
+
+**Step 4 — Collect output and write artifacts:**
+
+When the contrarian agent completes, write its output following the same DIVE worker schema:
+
+- `dive/q_contrarian/output.json` — atomic write (temp + mv). Same schema as other `dive/q_*/output.json` files, including `citations[]` array.
+- `dive/q_contrarian/output.md` — human-readable findings.
+- `dive/q_contrarian/status.json` — `{status: "completed", completed_at: "<ISO>", duration_ms: <int>}`.
+
+If the contrarian agent fails or times out, write `dive/q_contrarian/status.json` with `status: "error"` or `status: "timeout"`. Do NOT abort — contrarian finding is a diversity enhancement, not critical to pipeline completion.
+
+Log event after contrarian agent resolves (completed, error, or timeout):
+```json
+{"event": "contrarian_agent_complete", "run_id": "<id>", "ts": "<ISO>", "status": "completed|timeout|error", "duration_ms": <int>, "claims_count": <int or 0 on error/timeout>}
+```
+
+**Step 5 — Merge into claims collection:**
+
+`dive/q_contrarian/output.json` is merged into the claims collection during VERIFY stage in exactly the same way as other `dive/q_*/output.json` files. `Stage 4.1 Claim extraction` reads all `dive/q_*/output.json` from completed workers — q_contrarian is included automatically when its status is `completed`.
+
+Citations from `q_contrarian` are merged into the final source list during synthesis (Stage 5.1) alongside all other completed worker citations.
+
+**Step 6 — Log contrarian completion event (separate from dive_complete):**
+
+Do NOT re-log `dive_complete`. Instead, log a distinct event after contrarian resolves:
+
+```json
+{"event": "contrarian_complete", "run_id": "<id>", "status": "completed|timeout|error", "contrarian_included": true, "ts": "<ISO>"}
+```
+
+Downstream consumers check for `contrarian_complete` event in events.jsonl to determine if contrarian output exists. The original `dive_complete` event remains unchanged and canonical.
+
+If contrarian failed/timed out: `"contrarian_included": false`. Consumers treat this as "contrarian was attempted but no output available."
+
+**Resume protocol for contrarian workers:**
+
+- If resuming and `dive/q_contrarian/status.json` exists with `status: "completed"`, do NOT re-dispatch.
+- If resuming and `dive/q_contrarian/status.json` has `status: "pending"` or `status: "error"` or `status: "timeout"`, re-dispatch if trigger condition is still met.
+- If resuming from DIVE and overlap ratio is re-computed, dispatch contrarian only if `avg_overlap_ratio > 0.6` AND 2+ workers completed.
+- **Cache validity:** contrarian prompt depends on BOTH `dive-prompt.md` hash AND the set of completed worker outputs (which form the blacklist). If either changes, invalidate `dive/q_contrarian/` and re-dispatch if trigger is met.
+
 ## Stage 4: VERIFY
 
 **Claim extraction (inline) + adversarial verification (parallel subagents), ~60-120s.**
