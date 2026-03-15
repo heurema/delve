@@ -7,7 +7,6 @@ Merge research outputs from multiple dive agents and annotate with verification 
 ## Inputs
 
 - `dive/q_*/output.json` — structured research per sub-question
-- `dive/q_*/output.md` — human-readable research per sub-question
 - `verify/verdicts/c_*.json` — per-claim verification verdicts (if verify ran)
 - `verify/summary.json` — aggregate verification stats (if verify ran)
 - `scan/result.json` — original source list

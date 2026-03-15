@@ -110,7 +110,7 @@ Runs checkpoint after each stage to `~/.cache/delve/runs/`. Resume interrupted r
 
 ## Privacy
 
-Delve uses Claude Code subagents and built-in WebSearch/WebFetch tools. Your research topic and web content are processed through Claude's standard API under your existing authentication. No data is sent to additional endpoints beyond what Claude Code normally uses. When `--providers claude` is active, no external AI models are invoked and the topic is redacted in local event logs.
+Delve uses Claude Code subagents and built-in WebSearch/WebFetch tools. Your research topic and web content are processed through Claude's standard API under your existing authentication. DIVE agents use an optional Python script (`scripts/fetch_clean.py`) to extract clean article text via the trafilatura library — this makes direct HTTP requests from your machine to fetch web pages, separate from Claude Code's WebFetch. If the script is unavailable (no `uv` installed) or fails, agents fall back to WebFetch automatically. When `--providers claude` is active, no external AI models are invoked and the topic is redacted in local event logs.
 
 ## Feedback
 

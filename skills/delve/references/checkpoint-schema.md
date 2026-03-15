@@ -49,11 +49,11 @@ Events:
 - `worker_error` — `{task_id, error}`
 - `worker_retry` — `{task_id, attempt}`
 - `dive_complete` — `{completed, failed, coverage}`
-- `claim_extraction_complete` — `{total_claims, by_type}`
+- `claim_extraction_complete` — `{total_claims, by_type, prompt_hashes}`
 - `verify_complete` — `{verified, contested, rejected, uncertain}`
 - `overlap_analysis_complete` — `{avg_overlap_ratio, pair_count}` — emitted after Stage 3.5 source overlap detection
 - `source_saturation_detected` — `{overlap_ratio, pairs_affected}` — emitted when avg_overlap_ratio > 0.6 (warning only)
-- `synthesize_complete` — `{verification_status, completion_status, composite_score, output_path}`
+- `synthesize_complete` — `{verification_status, completion_status, composite_score, output_path, prompt_hashes}`
 - `run_complete` — `{duration_ms, status}`
 - `run_aborted` — `{reason, stage}`
 - `run_cancelled` — `{stage}`

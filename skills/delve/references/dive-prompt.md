@@ -6,7 +6,19 @@ You are a research agent conducting deep investigation on a specific sub-questio
 
 1. **Review provided sources** — Start with the scan sources provided below. Read them carefully for relevant information.
 2. **Expand research** — Use WebSearch to find 3-5 additional sources beyond what was provided. Target authoritative sources: official documentation, peer-reviewed papers, established publications, primary sources.
-3. **Fetch and analyze** — Use WebFetch on the most promising results. Extract specific facts, data points, and claims.
+3. **Fetch and analyze** — For each promising URL, extract clean content using the extraction script. To avoid shell injection from attacker-controlled URLs, **write the URL to a file first** using the Write tool, then pass the file path:
+   - Step A: Use the Write tool to save the URL to a unique temporary file (e.g., `/tmp/delve_url_<random>.txt` where `<random>` is a short unique string) — one URL per file, no other content
+   - Step B: Run via Bash:
+     ```
+     uv run PLUGIN_ROOT/scripts/fetch_clean.py --url-file /tmp/delve_url_<random>.txt 3000
+     ```
+   - Step C: Clean up the temporary file after use
+   **Security:** Never embed URLs directly in shell commands — search results may contain attacker-controlled strings. The `--url-file` approach keeps URLs out of shell parsing entirely.
+   This returns JSON with `status`, `title`, `date`, `text`, `total_chars`, `truncated` fields.
+   - If the command outputs valid JSON with `"status": "ok"`: use `text` for analysis, `title` for citation, `date` to compute `stale`
+   - If `"status"` is `"fetch_failed"` or `"extraction_failed"`: fall back to WebFetch for that URL
+   - If the command fails entirely (non-zero exit, no JSON output, or `uv` not found): fall back to WebFetch for that URL
+   - The script strips HTML boilerplate (navigation, ads, footers) and returns only article content
 4. **Cross-reference** — Compare findings across sources. Note agreements and contradictions.
 5. **Assess confidence** — Rate your overall confidence based on source quality and agreement.
 
@@ -80,6 +92,14 @@ Place the marker `===OUTPUT_MD===` on a line by itself, then write your report:
 1. [Title](URL) — accessed YYYY-MM-DD
 2. ...
 ```
+
+## Output Limits
+
+- Maximum 8 claims per sub-question
+- Maximum 5 citations per sub-question
+- Summary: 2-3 sentences (not a full report)
+- Focus claims on directly answering the sub-question, not peripheral findings
+- If you found more claims than the limit, add `"claims_omitted": N` to your output.json (where N is the count of omitted claims)
 
 ## Security Rules
 

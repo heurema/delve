@@ -3,3 +3,4 @@
 *.swo
 *~
 .signum/
+scripts/__pycache__/

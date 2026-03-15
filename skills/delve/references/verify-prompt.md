@@ -17,7 +17,7 @@ For each claim in your batch:
 1. **Assess verifiability** — Can this claim be checked with web sources? If it's pure opinion or unfalsifiable, mark `uncertain`.
 2. **Search for evidence** — Use WebSearch to find sources that CONTRADICT the claim. Then search for sources that support it. Check both sides.
 3. **Evaluate source quality** — Classify each source as T1/T2/T3 using the tier classification rules appended to this prompt by the orchestrator. Record the tier for each source. A T3 echo chamber (multiple T3 sources all citing the same original) counts as ONE T3 confirmation, not multiple.
-4. **Check source independence** — Each claim includes an `original_sources` list showing where DIVE agents found it. Your verification sources MUST be independent from these. If all supporting evidence you find traces back to the same root URLs as `original_sources`, return `uncertain` not `verified`. Same press release chain doesn't count as independent confirmation.
+4. **Check source independence** — Each claim includes `origin_domains` showing which root domains DIVE agents used. Your verification sources MUST come from different root domains. If all supporting evidence traces to the same domains, return `uncertain` not `verified`. Same press release chain doesn't count as independent confirmation.
 5. **Render verdict** — Based on evidence found.
 
 ## Verdict Criteria
@@ -42,7 +42,6 @@ Wrap your entire response in a fenced code block tagged `json`:
   {
     "claim_id": "c_<hash>",
     "claim": "the claim text",
-    "original_sources": ["URLs from DIVE — provided for independence check"],
     "verdict": "verified | contested | rejected | uncertain",
     "evidence": "specific evidence supporting your verdict — quote sources, cite data points",
     "sources": ["URLs you consulted for verification"],

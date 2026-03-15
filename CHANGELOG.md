@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.7.0] - 2026-03-15
+
+### Added
+- `scripts/fetch_clean.py` — PEP 723 trafilatura-based content extraction with 15s timeout, title/date metadata, WebFetch fallback
+- `references/source-authority-rules-compact.md` — 80-token compact tier rules for claim extraction and SYNTHESIZE (FROZEN)
+- Output Limits in dive-prompt.md: max 8 claims, 5 citations per sub-question with `claims_omitted` overflow signal
+- `prompt_hashes` field in `claim_extraction_complete` and `synthesize_complete` checkpoint events
+- Explicit prompt assembly order in SKILL.md 3.1 and 4.3 for cache-friendly shared prefixes
+
+### Changed
+- SYNTHESIZE no longer receives `output.md` — uses `output.json` only (FROZEN: synthesize-guide.md updated)
+- Claim extraction (4.1) and SYNTHESIZE (5.1) use compact source-authority-rules; VERIFY (4.3) keeps full rules
+- VERIFY batch payload uses `origin_domains` instead of `original_sources` + `original_source_tiers` (FROZEN: verify-prompt.md updated)
+- DIVE agents use fetch_clean.py for content extraction with 3-tier fallback to WebFetch
+- SKILL.md 3.1 prompt building includes PLUGIN_ROOT resolution
+- Resume Protocol hash-check chain includes `source-authority-rules-compact.md`
+- README privacy section updated: discloses direct HTTP via trafilatura
+
+### Token Impact
+- Target: 45-60% reduction (65K → 25-36K input tokens per medium-depth run)
+- Step 1 (prompt hygiene): ~15-22K savings
+- Step 2 (content extraction + VERIFY slim): ~10-15K savings
+- Step 3 (cache layout): ~2-4K savings
+
 ## [0.6.0] - 2026-03-14
 
 ### Added
