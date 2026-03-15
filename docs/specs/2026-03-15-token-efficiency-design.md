@@ -61,7 +61,7 @@ New approach: two versions based on consumer needs.
 
 **Full version (for DIVE agents):** Keep current file as-is. DIVE agents need the full ruleset to correctly classify sources they discover. ~665 tokens, but only sent to DIVE agents (4-5 copies max).
 
-**Compact version (for VERIFY, claim extraction, SYNTHESIZE):** These stages already receive pre-classified `source_tier` values from DIVE. They need only the tier ordering and key rules, not the full domain lists.
+**Compact version (for claim extraction and SYNTHESIZE only):** These stages already receive pre-classified `source_tier` values from DIVE. They need only the tier ordering and key rules, not the full domain lists. **VERIFY keeps full rules** — verifiers discover and classify *new* sources independently (verify-prompt.md step 3: "Classify each source as T1/T2/T3"), so they need the complete domain lists and classification rules.
 
 Create `references/source-authority-rules-compact.md`:
 ```markdown
@@ -75,7 +75,7 @@ Rules: default T3, upgrade only on match. No transitive trust. Press releases al
 T3-only claims -> confidence: low. Multiple T3 citing same source = 1 confirmation.
 ```
 
-~80 tokens instead of 665. SKILL.md updated: sections 4.1 (claim extraction) and 4.3 (VERIFY dispatch) changed from `Read references/source-authority-rules.md` to `Read references/source-authority-rules-compact.md`. SYNTHESIZE (5.1) also uses compact version.
+~80 tokens instead of 665. SKILL.md updated: section 4.1 (claim extraction) changed from `Read references/source-authority-rules.md` to `Read references/source-authority-rules-compact.md`. SYNTHESIZE (5.1) also uses compact version. **VERIFY (4.3) keeps full `source-authority-rules.md`** — verifiers must classify newly discovered sources.
 
 **Cache invalidation:** `source-authority-rules-compact.md` is a new file, not currently tracked in the resume protocol's hash-check chain. Add it to SKILL.md's Resume Protocol: VERIFY cache validity must also hash `source-authority-rules-compact.md` alongside `claim-extraction-prompt.md` and `verify-prompt.md`. SYNTHESIZE cache validity must hash it alongside `synthesize-guide.md` and `security-policy.md`.
 
@@ -94,6 +94,7 @@ Add output constraints to the dive-prompt.md output contract:
 - Maximum 5 citations per sub-question
 - Summary: 2-3 sentences (not a full report)
 - Focus claims on directly answering the sub-question, not peripheral findings
+- If you found more claims than the limit, add `"claims_omitted": N` to your output.json (where N is the count of omitted claims)
 ```
 
 This reduces DIVE output size, which cascades to smaller inputs for claim extraction and SYNTHESIZE.
@@ -123,9 +124,16 @@ PEP 723 inline metadata script — self-contained, no venv needed:
 """Fetch URL and extract clean article text via trafilatura."""
 
 import json
+import signal
 import sys
 
-from trafilatura import fetch_url, extract
+from trafilatura import bare_extraction, fetch_url
+from trafilatura.settings import use_config
+
+# Hard timeout: 15s total (fetch + extract). Prevents hung network stalls.
+signal.signal(signal.SIGALRM, lambda *_: sys.exit(124))
+signal.alarm(15)
+
 
 def main():
     if len(sys.argv) < 2:
@@ -135,14 +143,17 @@ def main():
     url = sys.argv[1]
     max_chars = int(sys.argv[2]) if len(sys.argv) > 2 else 3000
 
-    html = fetch_url(url)
+    config = use_config()
+    config.set("DEFAULT", "DOWNLOAD_TIMEOUT", "10")
+
+    html = fetch_url(url, config=config)
     if not html:
         json.dump({"url": url, "status": "fetch_failed", "text": ""}, sys.stdout)
         sys.exit(0)
 
-    text = extract(
+    doc = bare_extraction(
         html,
-        output_format="txt",
+        url=url,
         favor_precision=True,
         include_comments=False,
         include_links=False,
@@ -151,10 +162,11 @@ def main():
         fast=True,
     )
 
-    if not text or len(text) < 100:
+    if not doc or not doc.text or len(doc.text) < 100:
         json.dump({"url": url, "status": "extraction_failed", "text": ""}, sys.stdout)
         sys.exit(0)
 
+    text = doc.text
     total_chars = len(text)
     if total_chars > max_chars:
         text = text[:max_chars]
@@ -165,6 +177,8 @@ def main():
     json.dump({
         "url": url,
         "status": "ok",
+        "title": doc.title or "",
+        "date": doc.date or "",
         "text": text,
         "total_chars": total_chars,
         "truncated": truncated,
@@ -175,7 +189,9 @@ if __name__ == "__main__":
     main()
 ```
 
-**Output contract:** JSON to stdout with fields `url`, `status` (ok|fetch_failed|extraction_failed), `text`, `total_chars`, `truncated`.
+**Output contract:** JSON to stdout with fields `url`, `status` (ok|fetch_failed|extraction_failed), `title`, `date`, `text`, `total_chars`, `truncated`. The `title` and `date` fields support DIVE's citation metadata requirements (`title`, `accessed`, `stale`). The agent uses `date` to compute `stale` (>12 months old) and sets `accessed` to today's date.
+
+**Timeout:** 15-second hard timeout via `SIGALRM` prevents hung network fetches or dependency installs from stalling the agent. trafilatura's own HTTP timeout set to 10s via config. On timeout, exit code 124 — agent falls back to WebFetch.
 
 **Dependencies:** `trafilatura` only. Managed by uv via PEP 723 — first run caches to `~/.cache/uv/`, subsequent runs instant.
 
@@ -300,7 +316,7 @@ Shared prefix comes first. All DIVE agents share the same prefix → prompt cach
 
 Same for VERIFY agents:
 ```
-[verify-prompt.md] + [source-authority-rules-compact.md] + [claim batch (unique)]
+[verify-prompt.md] + [source-authority-rules.md (full)] + [claim batch (unique)]
 ```
 
 **Estimated saving:** ~2-4K tokens (cache hits on shared prefix for agents 2-5).
@@ -328,7 +344,7 @@ Note: estimates are approximate and partially overlapping. Actual savings requir
 ### Step 1
 | File | Change | FROZEN? |
 |------|--------|---------|
-| `skills/delve/SKILL.md` | Update 5.1 to not collect output.md; update 4.1 and 4.3 to read `source-authority-rules-compact.md` instead of full rules; add compact file to Resume Protocol hash-check chain for VERIFY and SYNTHESIZE; add `source-authority-rules-compact.md` to Prompt Mutability section as FROZEN | No |
+| `skills/delve/SKILL.md` | Update 5.1 to not collect output.md; update 4.1 (claim extraction) to read `source-authority-rules-compact.md`; VERIFY (4.3) keeps full rules; add compact file to Resume Protocol hash-check chain for claim extraction and SYNTHESIZE; add `source-authority-rules-compact.md` to Prompt Mutability section as FROZEN; add `prompt_hashes` to checkpoint event types | No |
 | `skills/delve/references/synthesize-guide.md` | Remove `dive/q_*/output.md` from Inputs list | **FROZEN** — invalidates SYNTHESIZE cache |
 | `skills/delve/references/source-authority-rules-compact.md` | **New file** — 80-token compact tier rules for non-DIVE stages | New (add to Resume Protocol hash chain) |
 | `skills/delve/references/dive-prompt.md` | Add Output Limits section (max 8 claims, 5 citations) | MUTABLE |
@@ -341,6 +357,7 @@ Note: estimates are approximate and partially overlapping. Actual savings requir
 | `skills/delve/SKILL.md` | Add PLUGIN_ROOT resolution in 3.1; add URL-to-domain transform in 4.3 for VERIFY batch payload | No |
 | `skills/delve/references/verify-prompt.md` | Replace `original_sources` with `origin_domains` in step 4 and output schema | **FROZEN** — invalidates VERIFY cache |
 | `.gitignore` (delve repo) | Add `scripts/__pycache__/` | N/A |
+| `README.md` | Update privacy section: disclose direct HTTP via trafilatura, note fallback to WebFetch | N/A |
 
 ### Step 3
 | File | Change | FROZEN? |
@@ -353,10 +370,16 @@ Note: estimates are approximate and partially overlapping. Actual savings requir
 |------|-----------|
 | trafilatura fails on JS-heavy/paywalled sites | Fallback to WebFetch in dive-prompt.md |
 | uv not installed | Shebang fails before Python runs — no JSON on stdout. dive-prompt.md fallback handles "no JSON output" explicitly → WebFetch |
-| Hard caps in DIVE lose important claims | 8 claims per sub-question is generous for focused questions. P0 retry already covers critical gaps |
+| Script hangs (network/dependency) | 15s SIGALRM hard timeout in script + 10s HTTP timeout in trafilatura config. Exit 124 → agent falls back to WebFetch |
+| Hard caps in DIVE lose important claims | 8 claims per sub-question is generous. `claims_omitted` field signals overflow to downstream stages. P0 retry already covers critical gaps |
+| Privacy/runtime contract change | fetch_clean.py makes direct outbound HTTP (not via Claude Code WebFetch). README.md must be updated to disclose this. Section "How it works" updated to mention optional Python-based extraction |
 | Slim VERIFY payload loses independence check fidelity | Root domains are sufficient — verifier checks domain independence, not URL-path uniqueness |
 | output.md removal degrades SYNTHESIZE quality | output.json contains all claims, citations, summary, confidence. output.md added no unique data |
 | Prompt reordering changes agent behavior | Reordering is content-preserving — same text, different position. Agents should behave identically |
+
+## Known Technical Debt
+
+- **Resume hash persistence gap:** SKILL.md Resume Protocol describes SHA-256 hash comparison for FROZEN prompts, but `checkpoint-schema.md` event types (`claim_extraction_complete`, `synthesize_complete`) do not currently store prompt hashes as fields. This is a pre-existing gap, not introduced by this spec. TODO: add `prompt_hashes: {file: hash}` dict to these event types in checkpoint-schema.md as part of Step 1 implementation.
 
 ## Deferred (future iterations, after telemetry)
 
@@ -367,9 +390,11 @@ Note: estimates are approximate and partially overlapping. Actual savings requir
 
 ## Acceptance Criteria
 
-1. ~~Medium-depth run consumes <= 35K input tokens~~ **Deferred** — requires token telemetry (not yet implemented). Manual spot-check: compare output.json sizes before/after optimization on the same topic
-2. Research quality unchanged: same verification_status and completion_status on identical topics (manual comparison on 2-3 test topics)
-3. `scripts/fetch_clean.py` works on macOS/Linux with `uv >= 0.4`. Test: `uv run scripts/fetch_clean.py "https://docs.python.org/3/library/asyncio.html" 2000` returns valid JSON with `status: "ok"`
-4. Fallback to WebFetch works when: (a) script returns `extraction_failed`, (b) `uv` not installed (no JSON output), (c) URL is JS-heavy/paywalled
-5. Resume protocol unbroken: FROZEN prompt changes (synthesize-guide.md, verify-prompt.md) trigger automatic re-run of their stages via SHA-256 hash mismatch. New file `source-authority-rules-compact.md` added to hash-check chain
-6. All FROZEN prompt modifications version-bumped in CHANGELOG. `source-authority-rules-compact.md` added to Prompt Mutability section as FROZEN
+1. ~~Medium-depth run consumes <= 35K input tokens~~ **Deferred** — requires token telemetry (not yet implemented). Manual spot-check: compare output.json sizes and claim counts before/after optimization on the same topic
+2. Research quality unchanged: same or better P0 coverage and claim count on identical topics (manual comparison on 2-3 test topics). Compare claim count, not just verification_status/completion_status
+3. `scripts/fetch_clean.py` works on macOS/Linux with `uv >= 0.4`. Test: `uv run scripts/fetch_clean.py "https://docs.python.org/3/library/asyncio.html" 2000` returns valid JSON with `status: "ok"`, non-empty `title`, and `date` field present
+4. Fallback to WebFetch works when: (a) script returns `extraction_failed`, (b) `uv` not installed (no JSON output), (c) URL is JS-heavy/paywalled, (d) script hangs >15s (SIGALRM timeout)
+5. Citation metadata parity: on a set of 5 test URLs, `title` field from fetch_clean.py is non-empty and `date` is parseable (or empty for undated pages). Quality not worse than current WebFetch path
+6. Resume protocol unbroken: FROZEN prompt changes (synthesize-guide.md, verify-prompt.md) trigger automatic re-run of their stages via SHA-256 hash mismatch. New file `source-authority-rules-compact.md` added to hash-check chain. `prompt_hashes` persisted in checkpoint events
+7. All FROZEN prompt modifications version-bumped in CHANGELOG. `source-authority-rules-compact.md` added to Prompt Mutability section as FROZEN
+8. README.md privacy section updated to disclose direct HTTP fetching via trafilatura
