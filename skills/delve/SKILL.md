@@ -144,9 +144,11 @@ If entity file not found (e.g. project=`contrib` with no entity file), set `stac
 
 If `project.name` is `personal`, check if cwd matches a sub-project (e.g. `~/personal/skill7/` → read `heurema.md` entity, `~/personal/forgequant/` → read `forgequant.md` entity). Use longest prefix match.
 
+**Cross-reference scan:** After loading the matched entity file, scan its content for references to other entity names (filenames in `bank/entities/` without `.md`). If any referenced entity's name or key_projects overlap with the query topic keywords, add it to `context_pack.related_entities` for disambiguation. This catches cross-project dependencies (e.g. fjx entity mentions "zitadel" → if query is about auth, zitadel context is surfaced).
+
 Append extracted stack to `query_enriched` (e.g. "auth middleware" → "auth middleware (Python, Odoo 18)"). Add to assumptions: "Stack: <stack> from entity <file>".
 
-**Tier 3 (always for delve):** Scan `docs/research/*.md` from the **project root** (detected via `git rev-parse --show-toplevel 2>/dev/null || pwd`) for prior work — NOT from cwd, which may be a subdirectory. Simple grep/awk pass — look for `date: YYYY-MM-DD` in first 10 lines of each file. For files where topic keywords appear in filename or first 50 lines, record `{path, date, relevance}`. **Note:** Stage 1.1 uses `context_pack.prior_research` instead of re-scanning docs/research/.
+**Tier 3 (always for delve):** Scan `docs/research/*.md` from the **project root** (detected via `git rev-parse --show-toplevel 2>/dev/null || pwd`) for prior work — NOT from cwd, which may be a subdirectory. Simple grep/awk pass — look for `date: YYYY-MM-DD` in first 10 lines of each file. For files where topic keywords appear in filename or first 50 lines, record `{path, date, relevance, stale}`. Mark `stale: true` if the file's `date` is >90 days old relative to today. **Note:** Stage 1.1 uses `context_pack.prior_research` instead of re-scanning docs/research/.
 
 **Output — write `$RUN_DIR/context.json` (atomic: temp + mv):**
 ```json
@@ -154,8 +156,9 @@ Append extracted stack to `query_enriched` (e.g. "auth middleware" → "auth mid
   "query_original": "<raw topic from user>",
   "query_enriched": "<topic with project hint appended when project detected>",
   "project": {"name": "<project or null>", "path": "<matched prefix or null>", "stack": "<stack from entity or null>", "entity_file": "<path to entity .md or null>"},
+  "related_entities": ["<entity names referenced by primary entity that match query keywords, or empty array>"],
   "git_branch": "<branch name or 'none'>",
-  "prior_research": [{"path": "docs/research/YYYY-MM-DD-topic.md", "date": "YYYY-MM-DD", "relevance": "high"}],
+  "prior_research": [{"path": "docs/research/YYYY-MM-DD-topic.md", "date": "YYYY-MM-DD", "relevance": "high", "stale": false}],
   "assumptions": ["Scoped to <project> based on cwd <cwd>", "Prior research exists from <date>"],
   "confidence": 0.85,
   "tier_used": 3,
@@ -165,7 +168,9 @@ Append extracted stack to `query_enriched` (e.g. "auth middleware" → "auth mid
 
 `query_enriched`: append project + stack hint when `project.name` non-null and `--broad` not active. `tier_used`: highest tier that produced data (`1` = cwd only, `2` = entity matched, `3` = prior research found).
 
-**Assumption display UX:** When `assumptions` non-empty and `ambiguity_detected` false — show one-line summary: `Context: <project> (<stack>) | prior research: <N> file(s). Override? [enter=ok]`. When `confidence` < 0.6 or `ambiguity_detected` true — ask user to disambiguate before SCAN. When `project.name` null and no prior_research — proceed silently.
+**Enrichment coherence check:** After building `query_enriched`, verify that all words from `query_original` (excluding stopwords: the, a, an, in, on, of, for, and, or, to, is, with) appear in `query_enriched`. If any original keyword is missing, the enrichment has drifted — add `enrichment_drift: true` to context.json and show the delta in assumptions: "Enrichment added: <added terms>. Original terms preserved: yes/no".
+
+**Assumption display UX:** When `assumptions` non-empty and `ambiguity_detected` false — show one-line summary: `Context: <project> (<stack>) | prior research: <N> file(s). Override? [enter=ok]`. If any prior_research entry has `stale: true`, append warning: `(⚠ N stale, >90d)`. When `confidence` < 0.6 or `ambiguity_detected` true — ask user to disambiguate before SCAN. When `project.name` null and no prior_research — proceed silently.
 
 **Log event:**
 ```json
@@ -276,6 +281,8 @@ Write `decompose/sub-tasks.json` (atomic). Schema per `references/checkpoint-sch
 
 **Skipped with `--quick` (already skipped to SYNTHESIZE by now).**
 
+**Drift detection:** For each sub-question, compute keyword overlap with the original query. Extract non-stopword tokens from both, compute `overlap = |intersection| / |query_tokens|`. If `overlap < 0.3`, mark `drift_warning: true` for that sub-question.
+
 Present decomposition to user for approval:
 
 ```
@@ -283,11 +290,13 @@ Decomposed "<topic>" into N sub-questions:
 
 1. [q_a1b2] How does X compare to Y? (P0, ~3 sources)
 2. [q_c3d4] What are alternatives to Z? (P1, ~5 sources)
-3. [q_e5f6] Historical context of W? (P2, ~2 sources)
+3. [q_e5f6] Historical context of W? (P2, ~2 sources) ⚠ drift
    ⏭ [q_g7h8] Already covered by docs/research/... (skip)
 
 Approve / Edit / Add / Remove?
 ```
+
+Sub-questions marked with `drift` have low keyword overlap with the original query — they may research adjacent topics instead of the requested one.
 
 Wait for user response. If edits requested:
 - Apply changes to sub-tasks.json
@@ -334,8 +343,23 @@ Agent tool:
 **For `--depth deep` with dependencies:**
 - Topological sort sub-questions by `depends_on`
 - Wave 1: dispatch all tasks with no dependencies
-- Collect Wave 1 → pass findings to Wave 2 prompts as additional context
+- Collect Wave 1 → **run wave-boundary quality check** (see below) → pass findings to Wave 2 prompts as additional context
 - Continue until all waves complete
+
+**Wave-boundary quality check (between waves, `--depth deep` only):**
+
+After collecting all Wave N results and before dispatching Wave N+1:
+
+1. For each completed Wave N worker, count claims with at least 1 source citation in `output.json`
+2. Compute `wave_verified_ratio = claims_with_source / total_claims` for the wave
+3. Log event: `{"event": "wave_boundary_check", "wave": N, "verified_ratio": <float>, "workers": <count>}`
+4. If `wave_verified_ratio < 0.6`:
+   - Display warning: "Wave N quality is low (verified_ratio=X). Y claims lack source citations. Proceed to Wave N+1? [enter=ok / abort]"
+   - If user aborts → follow abort procedure
+   - If user confirms → proceed, add `"wave_quality_override": true` to Wave N+1 dispatch events
+5. If `wave_verified_ratio >= 0.6` → proceed silently
+
+This prevents hallucination propagation: if Wave 1 outputs have low source backing, they become unreliable premises for Wave 2 agents.
 
 Write initial `status.json` for each dispatched worker: `{"status": "pending", "attempt_id": 1, ...}`.
 
@@ -349,18 +373,32 @@ When an agent completes:
 1. Parse the agent's response for `output.json` (structured data) plus `output.md` (human-readable report)
 2. Write `dive/q_<hash>/output.json` (atomic)
 3. Write `dive/q_<hash>/output.md` (atomic)
-4. Update `dive/q_<hash>/status.json`: status, completed_at, duration_ms
-5. Log event: `{"event": "worker_complete", "task_id": "q_<hash>", "status": "completed", "duration_ms": N, "claims_count": N}`
+4. Compute exploration depth ratio from agent output: count tool calls of type WebFetch/fetch_clean.py (`crawl_calls`) vs total tool calls (`total_calls`). Write to status.json: `depth_ratio = crawl_calls / total_calls` (0.0 if no tool calls).
+5. Update `dive/q_<hash>/status.json`: status, completed_at, duration_ms, depth_ratio
+6. Log event: `{"event": "worker_complete", "task_id": "q_<hash>", "status": "completed", "duration_ms": N, "claims_count": N, "depth_ratio": <float>}`
 
 **On timeout** (agent doesn't respond within WORKER_TIMEOUT_MS):
-1. Update status.json: `{"status": "timeout"}`
-2. Log event: `{"event": "worker_timeout", "task_id": "q_<hash>", "timeout_ms": 120000}`
+1. Update status.json: `{"status": "timeout", "timeout_stage": "<last_tool_type>"}`
+   - `timeout_stage`: infer from agent's last visible tool call — `"search"` (WebSearch), `"crawl"` (WebFetch/fetch_clean.py), or `"analysis"` (no recent tool call). Diagnostic only.
+2. Log event: `{"event": "worker_timeout", "task_id": "q_<hash>", "timeout_ms": 120000, "timeout_stage": "<stage>"}`
 
 **On error** (agent returns error or malformed output):
 1. Update status.json: `{"status": "error", "error": "<description>"}`
 2. Log event: `{"event": "worker_error", "task_id": "q_<hash>", "error": "<description>"}`
 
-### 3.4 Retry P0 failures
+### 3.4 Shallow exploration re-dive
+
+After collecting all workers, check for shallow exploration:
+
+For each completed P0 worker: if `depth_ratio < 0.2` (less than 20% of tool calls were page reads):
+1. Log event: `{"event": "shallow_exploration_detected", "task_id": "q_<hash>", "depth_ratio": <float>}`
+2. Re-dispatch ONCE with an amended prompt prepending: "Your previous research attempt used mostly search without reading pages. This time, for each search result, fetch and read the full page content before moving to the next search. Alternate: search → read → search → read."
+3. Update status.json: `attempt_id: 2, redive_reason: "shallow_exploration"`
+4. If re-dive also has `depth_ratio < 0.2` → accept the result (some topics genuinely have few fetchable pages)
+
+Only re-dive P0 workers. P1/P2 shallow exploration is accepted.
+
+### 3.5 Retry P0 failures
 
 If any P0 sub-question failed (timeout or error):
 1. Retry ONCE with a fresh agent
@@ -368,7 +406,7 @@ If any P0 sub-question failed (timeout or error):
 3. Log event: `{"event": "worker_retry", "task_id": "q_<hash>", "attempt": 2}`
 4. If retry also fails → proceed to coverage evaluation (may trigger ABORT)
 
-### 3.5 Evaluate coverage
+### 3.6 Evaluate coverage
 
 Compute priority-weighted coverage:
 

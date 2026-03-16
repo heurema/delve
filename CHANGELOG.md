@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.0] - 2026-03-16
+
+### Added
+- Behavioral seeding in dive-prompt: search-crawl alternation pattern + "Refine and re-search" step for iterative exploration (from SynPlanResearch-R1)
+- `depth_ratio` field in DIVE worker status.json — tracks crawl_calls / total_calls per worker
+- Shallow exploration re-dive gate: P0 workers with depth_ratio <0.2 get re-dispatched with crawl-first instructions
+- Wave-boundary quality check for `--depth deep` topological runs — blocks wave N+1 if wave N verified_ratio <0.6
+- `timeout_stage` diagnostic field in status.json on worker timeout (search/crawl/analysis)
+- Staleness flag (`stale: true`) in Tier 3 prior_research entries when >90 days old, surfaced in assumption display
+- Cross-reference scan in Tier 2 entity matching — detects references to other entities relevant to query
+- Enrichment coherence check — verifies query_original keywords survive into query_enriched
+- `related_entities` field in context.json schema
+- Drift warning in DECOMPOSE HITL — flags sub-questions with <30% keyword overlap with original query
+
+### Changed
+- dive-prompt.md: "Expand research" → "Broad search", "Fetch and analyze" → "Deep read", added step 4 "Refine and re-search"
+- DIVE stage renumbered: 3.4 = shallow re-dive gate (new), 3.5 = retry P0 failures, 3.6 = evaluate coverage
+
 ## [0.7.0] - 2026-03-15
 
 ### Added
