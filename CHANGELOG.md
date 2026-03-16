@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.1] - 2026-03-16
+
+### Security
+- security-policy.md: URL parameter exfiltration warning, image tag ban, run-dir file access restriction, semantic embedding attack warning, 2 new detection heuristics
+- dive-prompt.md: `<external_data>` untrusted data delimiters, prompt sandwiching, concrete attack examples, fetch_clean.py trust boundary
+- SKILL.md: MCP Colors red/blue trust zones, env var sanitization advisory, canary token prompt-leak detection (runtime-only, hash logging), output schema enforcement, content-level validation
+
+### Added
+- project.intent.md for signum intent alignment
+
 ## [0.8.0] - 2026-03-16
 
 ### Added
