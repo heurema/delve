@@ -1,7 +1,7 @@
 ---
 version: "1.0"
 project: delve
-updated: 2026-03-16
+updated: 2026-03-19
 ---
 
 # Project Intent
@@ -18,6 +18,8 @@ Autonomous deep research orchestrator for Claude Code. Runs a stage-gated pipeli
 - Checkpoint-based resume for interrupted runs
 - Contrarian agent dispatch on source saturation
 - Composite quality scoring with verification status
+- Token-efficient pipeline with trafilatura-based content extraction and prompt hygiene (45-60% input token reduction)
+- Stage 0.5 CONTEXTUALIZE: local context enrichment (entity files, prior research) before web SCAN
 
 ## Non-Goals
 
@@ -26,6 +28,19 @@ Autonomous deep research orchestrator for Claude Code. Runs a stage-gated pipeli
 - GUI or web interface
 - Direct code generation or execution (research output only)
 - Replacing manual expert review (augmenting, not replacing)
+
+## Success Criteria
+
+- verified_ratio >= 0.8 with 0 rejected P0 claims and >50% T1/T2 source backing for `verified` label
+- Weighted P0/P1/P2 coverage >= 0.7 to proceed from DIVE to VERIFY
+- Runs survive interruption and resume from last checkpoint without data loss
+- No secrets, API keys, or PII stored in run artifacts
+
+## Personas
+
+- **Developer / Researcher**: primary user, invokes `/delve <topic>` interactively to research technical topics; reviews HITL decomposition checkpoint before DIVE
+- **Security-conscious user**: uses `--providers claude` to prevent topic leakage to external AI models
+- **Plugin ecosystem user**: installs via emporium marketplace, uses alongside other heurema plugins
 
 ## Security Principles
 
