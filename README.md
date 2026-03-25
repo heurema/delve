@@ -1,19 +1,20 @@
-# Delve
+```
+       __     __
+  ____/ /__  / /   _____
+ / __  / _ \/ / | / / _ \
+/ /_/ /  __/ /| |/ /  __/
+\__,_/\___/_/ |___/\___/
+```
 
-<div align="center">
-
-**Autonomous deep research with claim-level verification**
+**Autonomous deep research with claim-level verification.**
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-5b21b6?style=flat-square)](https://skill7.dev/plugins/delve)
 [![Version](https://img.shields.io/badge/version-0.8.1-5b21b6?style=flat-square)](https://github.com/heurema/delve)
-[![License MIT](https://img.shields.io/badge/license-MIT-5b21b6?style=flat-square)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-```bash
-claude plugin marketplace add heurema/emporium
-claude plugin install delve@emporium
-```
+> Research tasks need more than a single web search. Delve runs stage-gated pipelines with parallel subagents and adversarial fact-checking.
 
-</div>
+---
 
 ## What it does
 
