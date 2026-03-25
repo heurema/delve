@@ -3,11 +3,19 @@
 # requires-python = ">=3.11"
 # dependencies = ["trafilatura"]
 # ///
-"""Fetch URL and extract clean article text via trafilatura."""
+"""Fetch URL and extract clean article text via trafilatura.
+
+Optional quarry integration: if QUARRY_BIN env var is set (or quarry is in PATH),
+extracted text is scanned for prompt injection patterns before output.
+Quarry findings are included in the JSON response as 'quarry_findings'.
+"""
 
 import ipaddress
 import json
+import os
+import shutil
 import signal
+import subprocess
 import sys
 from urllib.parse import urlparse
 
@@ -105,6 +113,24 @@ def main():
     else:
         truncated = False
 
+    # Quarry sanitization (optional — graceful if binary not found)
+    quarry_findings = []
+    quarry_bin = os.environ.get("QUARRY_BIN") or shutil.which("quarry")
+    if quarry_bin:
+        try:
+            proc = subprocess.run(
+                [quarry_bin, "--profile", "web_page", "--mode", "observe", "--format", "json", "-"],
+                input=text,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if proc.returncode in (0, 1, 2) and proc.stdout:
+                qr = json.loads(proc.stdout)
+                quarry_findings = qr.get("findings", [])
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+            pass  # quarry failed — continue without it
+
     json.dump({
         "url": url,
         "status": "ok",
@@ -113,6 +139,7 @@ def main():
         "text": text,
         "total_chars": total_chars,
         "truncated": truncated,
+        "quarry_findings": quarry_findings,
     }, sys.stdout, ensure_ascii=False)
 
 
