@@ -103,21 +103,29 @@ def main():
     config = use_config()
     config.set("DEFAULT", "DOWNLOAD_TIMEOUT", "10")
 
-    html = fetch_url(url, config=config)
+    try:
+        html = fetch_url(url, config=config)
+    except Exception:
+        _error(url, "fetch_failed")
+        return
     if not html:
         _error(url, "fetch_failed")
         return
 
-    doc = bare_extraction(
-        html,
-        url=url,
-        favor_precision=True,
-        include_comments=False,
-        include_links=False,
-        include_tables=True,
-        deduplicate=True,
-        fast=True,
-    )
+    try:
+        doc = bare_extraction(
+            html,
+            url=url,
+            favor_precision=True,
+            include_comments=False,
+            include_links=False,
+            include_tables=True,
+            deduplicate=True,
+            fast=True,
+        )
+    except Exception:
+        _error(url, "extraction_failed")
+        return
 
     if not doc or not doc.text or len(doc.text) < 100:
         _error(url, "extraction_failed")
