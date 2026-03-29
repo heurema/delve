@@ -62,7 +62,7 @@ urllib.request.install_opener(
 )
 
 def _timeout_handler(*_):
-    json.dump({"url": "", "status": "timeout", "text": "", "title": "", "date": "", "total_chars": 0, "truncated": False}, sys.stdout)
+    json.dump({"url": "", "status": "fetch_failed", "text": "", "title": "", "date": "", "total_chars": 0, "truncated": False}, sys.stdout)
     sys.stdout.flush()
     sys.exit(0)
 
@@ -97,7 +97,7 @@ def main():
         url = sys.argv[1]
         max_chars_arg = sys.argv[2] if len(sys.argv) > 2 else "3000"
 
-    if not url:
+    if not url or not url.startswith(("http://", "https://")):
         _error("", "fetch_failed")
         return
 
