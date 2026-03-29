@@ -95,6 +95,8 @@ def main():
 
     try:
         max_chars = int(max_chars_arg)
+        if max_chars <= 0:
+            max_chars = 3000
     except ValueError:
         max_chars = 3000
 
