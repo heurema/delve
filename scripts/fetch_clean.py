@@ -73,9 +73,12 @@ def main():
         if hostname in ("localhost", "") or hostname.endswith(".local"):
             _error(url, "fetch_failed")
             return
+        def _is_blocked(addr):
+            return not addr.is_global or addr.is_loopback
+
         try:
             addr = ipaddress.ip_address(hostname)
-            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+            if _is_blocked(addr):
                 _error(url, "fetch_failed")
                 return
         except ValueError:
@@ -83,7 +86,7 @@ def main():
             try:
                 for family, _, _, _, sockaddr in socket.getaddrinfo(hostname, None):
                     resolved = ipaddress.ip_address(sockaddr[0])
-                    if resolved.is_private or resolved.is_loopback or resolved.is_link_local or resolved.is_reserved:
+                    if _is_blocked(resolved):
                         _error(url, "fetch_failed")
                         return
             except socket.gaierror:
