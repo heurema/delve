@@ -24,7 +24,12 @@ from trafilatura import bare_extraction, fetch_url
 from trafilatura.settings import use_config
 
 # Hard timeout: 15s total (fetch + extract). Prevents hung network stalls.
-signal.signal(signal.SIGALRM, lambda *_: sys.exit(124))
+def _timeout_handler(*_):
+    json.dump({"url": "", "status": "timeout", "text": "", "title": "", "date": "", "total_chars": 0, "truncated": False}, sys.stdout)
+    sys.stdout.flush()
+    sys.exit(124)
+
+signal.signal(signal.SIGALRM, _timeout_handler)
 signal.alarm(15)
 
 
