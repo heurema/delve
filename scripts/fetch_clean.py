@@ -27,7 +27,7 @@ from trafilatura.settings import use_config
 def _timeout_handler(*_):
     json.dump({"url": "", "status": "timeout", "text": "", "title": "", "date": "", "total_chars": 0, "truncated": False}, sys.stdout)
     sys.stdout.flush()
-    sys.exit(124)
+    sys.exit(0)
 
 signal.signal(signal.SIGALRM, _timeout_handler)
 signal.alarm(15)
