@@ -34,6 +34,8 @@ class _SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         parsed = urlparse(newurl)
+        if parsed.scheme not in ("http", "https"):
+            raise urllib.error.URLError("redirect to non-HTTP scheme")
         hostname = parsed.hostname or ""
         if hostname in ("localhost", "") or hostname.endswith(".local"):
             raise urllib.error.URLError("redirect to blocked host")
