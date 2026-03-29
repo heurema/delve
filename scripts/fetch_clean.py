@@ -51,19 +51,18 @@ class _SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-# Install SSRF-safe redirect handler globally before trafilatura uses urllib
+# Install SSRF-safe opener: block redirects to private IPs, disable proxy
 urllib.request.install_opener(
-    urllib.request.build_opener(_SSRFSafeRedirectHandler)
+    urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _SSRFSafeRedirectHandler,
+    )
 )
 
-# Hard timeout: 15s total (fetch + extract). Prevents hung network stalls.
 def _timeout_handler(*_):
     json.dump({"url": "", "status": "timeout", "text": "", "title": "", "date": "", "total_chars": 0, "truncated": False}, sys.stdout)
     sys.stdout.flush()
     sys.exit(0)
-
-signal.signal(signal.SIGALRM, _timeout_handler)
-signal.alarm(15)
 
 
 def _error(url, status):
@@ -72,6 +71,10 @@ def _error(url, status):
 
 
 def main():
+    # Hard timeout: 15s total (fetch + extract). Prevents hung network stalls.
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(15)
+
     if len(sys.argv) < 2:
         print("Usage: fetch_clean.py --url-file <path> [max_chars]", file=sys.stderr)
         sys.exit(1)
