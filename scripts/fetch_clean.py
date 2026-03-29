@@ -44,7 +44,8 @@ def main():
             print("Missing path after --url-file", file=sys.stderr)
             sys.exit(1)
         try:
-            url = open(sys.argv[2]).read().strip()
+            with open(sys.argv[2]) as f:
+                url = f.read().strip()
         except OSError:
             _error("", "fetch_failed")
             return
