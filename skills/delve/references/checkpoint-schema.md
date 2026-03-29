@@ -58,6 +58,16 @@ Events:
 - `run_aborted` — `{reason, stage}`
 - `run_cancelled` — `{stage}`
 - `resume_started` — `{from_stage, rerun_tasks[]}`
+- `contextualize_complete` — `{tier_used, project, stack, prior_research_count, ambiguity_detected}`
+- `worker_output_rejected` — `{task_id, reason}` — DIVE output missing marker/malformed
+- `canary_leak_detected` — `{task_id, canary_hash}` — prompt injection leak detected
+- `content_validation_warning` — `{task_id, field, pattern}` — suspicious content in DIVE output
+- `shallow_exploration_detected` — `{task_id, depth_ratio}`
+- `wave_boundary_check` — `{wave, verified_ratio, workers}` — deep-mode inter-wave quality gate
+- `contrarian_agent_dispatched` — `{blacklist_size, source_count_overall}`
+- `contrarian_agent_complete` — `{status, duration_ms, claims_count}`
+- `contrarian_complete` — `{status, contrarian_included}`
+- `injection_detected` — `{source, pattern}` — prompt injection found in web content
 
 ## state.json
 
