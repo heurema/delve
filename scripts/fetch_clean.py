@@ -18,10 +18,43 @@ import signal
 import socket
 import subprocess
 import sys
+import urllib.request
 from urllib.parse import urlparse
 
 from trafilatura import bare_extraction, fetch_url
 from trafilatura.settings import use_config
+
+
+def _is_blocked(addr):
+    return not addr.is_global or addr.is_loopback
+
+
+class _SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Block redirects to private/internal IP addresses."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parsed = urlparse(newurl)
+        hostname = parsed.hostname or ""
+        if hostname in ("localhost", "") or hostname.endswith(".local"):
+            raise urllib.error.URLError("redirect to blocked host")
+        try:
+            addr = ipaddress.ip_address(hostname)
+            if _is_blocked(addr):
+                raise urllib.error.URLError("redirect to non-global IP")
+        except ValueError:
+            try:
+                for _, _, _, _, sockaddr in socket.getaddrinfo(hostname, None):
+                    if _is_blocked(ipaddress.ip_address(sockaddr[0])):
+                        raise urllib.error.URLError("redirect resolves to non-global IP")
+            except socket.gaierror:
+                raise urllib.error.URLError("redirect target DNS failure")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+# Install SSRF-safe redirect handler globally before trafilatura uses urllib
+urllib.request.install_opener(
+    urllib.request.build_opener(_SSRFSafeRedirectHandler)
+)
 
 # Hard timeout: 15s total (fetch + extract). Prevents hung network stalls.
 def _timeout_handler(*_):
@@ -73,9 +106,6 @@ def main():
         if hostname in ("localhost", "") or hostname.endswith(".local"):
             _error(url, "fetch_failed")
             return
-        def _is_blocked(addr):
-            return not addr.is_global or addr.is_loopback
-
         try:
             addr = ipaddress.ip_address(hostname)
             if _is_blocked(addr):
