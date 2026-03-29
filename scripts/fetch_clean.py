@@ -15,16 +15,56 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
+import urllib.request
 from urllib.parse import urlparse
 
 from trafilatura import bare_extraction, fetch_url
 from trafilatura.settings import use_config
 
-# Hard timeout: 15s total (fetch + extract). Prevents hung network stalls.
-signal.signal(signal.SIGALRM, lambda *_: sys.exit(124))
-signal.alarm(15)
+
+def _is_blocked(addr):
+    return not addr.is_global or addr.is_loopback
+
+
+class _SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Block redirects to private/internal IP addresses."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parsed = urlparse(newurl)
+        if parsed.scheme not in ("http", "https"):
+            raise urllib.error.URLError("redirect to non-HTTP scheme")
+        hostname = parsed.hostname or ""
+        if hostname in ("localhost", "") or hostname.endswith(".local"):
+            raise urllib.error.URLError("redirect to blocked host")
+        try:
+            addr = ipaddress.ip_address(hostname)
+            if _is_blocked(addr):
+                raise urllib.error.URLError("redirect to non-global IP")
+        except ValueError:
+            try:
+                for _, _, _, _, sockaddr in socket.getaddrinfo(hostname, None):
+                    if _is_blocked(ipaddress.ip_address(sockaddr[0])):
+                        raise urllib.error.URLError("redirect resolves to non-global IP")
+            except socket.gaierror:
+                raise urllib.error.URLError("redirect target DNS failure")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+# Install SSRF-safe opener: block redirects to private IPs, disable proxy
+urllib.request.install_opener(
+    urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _SSRFSafeRedirectHandler,
+    )
+)
+
+def _timeout_handler(*_):
+    json.dump({"url": "", "status": "fetch_failed", "text": "", "title": "", "date": "", "total_chars": 0, "truncated": False}, sys.stdout)
+    sys.stdout.flush()
+    sys.exit(0)
 
 
 def _error(url, status):
@@ -33,6 +73,10 @@ def _error(url, status):
 
 
 def main():
+    # Hard timeout: 15s total (fetch + extract). Prevents hung network stalls.
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(15)
+
     if len(sys.argv) < 2:
         print("Usage: fetch_clean.py --url-file <path> [max_chars]", file=sys.stderr)
         sys.exit(1)
@@ -43,7 +87,8 @@ def main():
             print("Missing path after --url-file", file=sys.stderr)
             sys.exit(1)
         try:
-            url = open(sys.argv[2]).read().strip()
+            with open(sys.argv[2]) as f:
+                url = f.read().strip()
         except OSError:
             _error("", "fetch_failed")
             return
@@ -52,7 +97,7 @@ def main():
         url = sys.argv[1]
         max_chars_arg = sys.argv[2] if len(sys.argv) > 2 else "3000"
 
-    if not url:
+    if not url or not url.startswith(("http://", "https://")):
         _error("", "fetch_failed")
         return
 
@@ -68,38 +113,57 @@ def main():
             return
         try:
             addr = ipaddress.ip_address(hostname)
-            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+            if _is_blocked(addr):
                 _error(url, "fetch_failed")
                 return
         except ValueError:
-            pass  # hostname is a domain, not an IP — OK
+            # hostname is a domain — resolve and check all resulting IPs
+            try:
+                for family, _, _, _, sockaddr in socket.getaddrinfo(hostname, None):
+                    resolved = ipaddress.ip_address(sockaddr[0])
+                    if _is_blocked(resolved):
+                        _error(url, "fetch_failed")
+                        return
+            except socket.gaierror:
+                _error(url, "fetch_failed")
+                return
     except Exception:
         _error(url, "fetch_failed")
         return
 
     try:
         max_chars = int(max_chars_arg)
+        if max_chars <= 0:
+            max_chars = 3000
     except ValueError:
         max_chars = 3000
 
     config = use_config()
     config.set("DEFAULT", "DOWNLOAD_TIMEOUT", "10")
 
-    html = fetch_url(url, config=config)
+    try:
+        html = fetch_url(url, config=config)
+    except Exception:
+        _error(url, "fetch_failed")
+        return
     if not html:
         _error(url, "fetch_failed")
         return
 
-    doc = bare_extraction(
-        html,
-        url=url,
-        favor_precision=True,
-        include_comments=False,
-        include_links=False,
-        include_tables=True,
-        deduplicate=True,
-        fast=True,
-    )
+    try:
+        doc = bare_extraction(
+            html,
+            url=url,
+            favor_precision=True,
+            include_comments=False,
+            include_links=False,
+            include_tables=True,
+            deduplicate=True,
+            fast=True,
+        )
+    except Exception:
+        _error(url, "extraction_failed")
+        return
 
     if not doc or not doc.text or len(doc.text) < 100:
         _error(url, "extraction_failed")
