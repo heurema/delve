@@ -162,6 +162,7 @@ Hash: first 6 hex chars of SHA-256 of question text (lowercase).
   "duration_ms": "integer | null",
   "input_hash": "string — SHA-256 of prompt sent",
   "prompt_hash": "string — SHA-256 of dive-prompt.md content",
+  "depth_ratio": "float | null — crawl_calls / total_calls, written on completion",
   "error": "string | null"
 }
 ```
