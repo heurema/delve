@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 from urllib.parse import urlparse
@@ -72,7 +73,16 @@ def main():
                 _error(url, "fetch_failed")
                 return
         except ValueError:
-            pass  # hostname is a domain, not an IP — OK
+            # hostname is a domain — resolve and check all resulting IPs
+            try:
+                for family, _, _, _, sockaddr in socket.getaddrinfo(hostname, None):
+                    resolved = ipaddress.ip_address(sockaddr[0])
+                    if resolved.is_private or resolved.is_loopback or resolved.is_link_local or resolved.is_reserved:
+                        _error(url, "fetch_failed")
+                        return
+            except socket.gaierror:
+                _error(url, "fetch_failed")
+                return
     except Exception:
         _error(url, "fetch_failed")
         return
