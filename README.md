@@ -9,7 +9,7 @@
 **Autonomous deep research with claim-level verification.**
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-5b21b6?style=flat-square)](https://skill7.dev/plugins/delve)
-[![Version](https://img.shields.io/badge/version-0.8.1-5b21b6?style=flat-square)](https://github.com/heurema/delve)
+[![Version](https://img.shields.io/github/v/tag/heurema/delve?label=version&style=flat-square&color=5b21b6)](https://github.com/heurema/delve)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > Research tasks need more than a single web search. Delve runs stage-gated pipelines with parallel subagents and adversarial fact-checking.
